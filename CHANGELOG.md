@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-01
+
+### Added
+- **The reveal plays on every display.** On a multi-monitor desk the emoji, message, or video landed only on the main screen while the others just dimmed. Every display now shows the whole thing, in step. A new "Show on every display" switch in Settings > Lock Screen turns it back off if you only want the main one.
+
 ## [1.4.1] - 2026-08-16
 
 ### Fixed
