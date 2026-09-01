@@ -69,6 +69,7 @@ struct SettingsView: View {
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
     @AppStorage(Constants.cameraOnFailedUnlockKey) private var cameraOnFailedUnlock = Constants.defaultCameraOnFailedUnlock
+    @AppStorage(Constants.showRevealOnAllDisplaysKey) private var showRevealOnAllDisplays = Constants.defaultShowRevealOnAllDisplays
 
 
     @ObservedObject private var updater = UpdateController.shared
@@ -221,6 +222,15 @@ struct SettingsView: View {
             }
 
             SettingsPanel {
+                SettingsRow(
+                    "Show on every display",
+                    subtitle: "Mirror the reveal across all monitors. Off shows it only on the main one."
+                ) {
+                    SettingsSwitch(isOn: $showRevealOnAllDisplays)
+                }
+
+                SettingsDivider()
+
                 SettingsRow(
                     "Camera on failed unlock",
                     subtitle: "Saves a photo of the attempt to Downloads."
@@ -843,11 +853,7 @@ struct SettingsView: View {
             }
 
             SettingsPanel {
-                SettingsRow(
-                    "Made by Sirpooya",
-                    subtitle: "Forked from lockpaw by Erik Nielsen.",
-                    subtitleSize: 11
-                ) {
+                SettingsRow("Made by Sirpooya") {
                     Link("View on GitHub", destination: repoURL)
                         .buttonStyle(.link)
                 }

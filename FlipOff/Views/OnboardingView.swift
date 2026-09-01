@@ -149,7 +149,7 @@ struct OnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(spacing: 20) {
-            mascotHero(size: 96)
+            mascotHero(size: 96, glyph: EmojiMascot.defaultValue)
 
             VStack(spacing: 8) {
                 Text("Welcome to FlipOff")
@@ -165,7 +165,7 @@ struct OnboardingView: View {
     }
 
     /// The mascot in a breathing pool of light — the app's hero, reused across steps.
-    private func mascotHero(size: CGFloat) -> some View {
+    private func mascotHero(size: CGFloat, glyph: String? = nil) -> some View {
         ZStack {
             Ellipse()
                 .fill(Color("FlipOffAmber").opacity(0.05))
@@ -173,7 +173,7 @@ struct OnboardingView: View {
                 .blur(radius: 18)
                 .offset(y: size * 0.5)
 
-            mascotImage(size: size)
+            mascotImage(size: size, glyph: glyph)
                 .shadow(color: Color("FlipOffAmber").opacity(0.18), radius: 24, y: 8)
                 .scaleEffect(mascotBreath ? 1.03 : 1.0)
                 .offset(y: mascotBreath ? -3 : 0)
@@ -186,9 +186,11 @@ struct OnboardingView: View {
         }
     }
 
-    /// Renders the chosen emoji at `size`.
-    private func mascotImage(size: CGFloat) -> some View {
-        Text(EmojiMascot.resolved(from: mascotEmoji))
+    /// Renders `glyph` at `size`, defaulting to the chosen emoji. The welcome
+    /// step passes the app's own mascot explicitly: that first screen is FlipOff
+    /// introducing itself, before the user has picked anything.
+    private func mascotImage(size: CGFloat, glyph: String? = nil) -> some View {
+        Text(glyph ?? EmojiMascot.resolved(from: mascotEmoji))
             .font(.system(size: size * 0.82))
             .frame(width: size, height: size)
     }

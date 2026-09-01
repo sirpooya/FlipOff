@@ -293,9 +293,20 @@ class LockController: ObservableObject {
                     screenRole: .primary,
                     phaseOffset: CGFloat(index) * 0.15
                 ))
-            } else {
+            }
+            // Secondary displays either mirror the whole reveal or stay bare scrim.
+            // Mirroring is the default: on a two-monitor desk the mascot landing on
+            // one screen while the other just dims reads as a glitch, not a gag.
+            let mirrorEverywhere = UserDefaults.standard.object(forKey: Constants.showRevealOnAllDisplaysKey) as? Bool
+                ?? Constants.defaultShowRevealOnAllDisplays
+            guard mirrorEverywhere else {
                 return AnyView(AmbientBackdropHost(controller: self))
             }
+            return AnyView(LockScreenView(
+                controller: self,
+                screenRole: .ambient,
+                phaseOffset: CGFloat(index) * 0.15
+            ))
         }) else {
             logger.error("Lock failed — no screens available for overlay")
             sleepPreventer.allowSleep()

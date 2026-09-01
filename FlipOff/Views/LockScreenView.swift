@@ -34,6 +34,11 @@ struct LockScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
+    /// Secondary displays mirror the reveal, but they are not where unlocking
+    /// happens: their shield windows are `ignoresMouseEvents`, and only the primary
+    /// window is ever key, which is what `LAAuthenticationView` needs to arm. So
+    /// everything interactive — the auth button, the Touch ID glyph — stays here.
+    private var isPrimary: Bool { screenRole == .primary }
     private var resolvedEmoji: String { EmojiMascot.resolved(from: mascotEmoji) }
     private var isVideoVisual: Bool { lockVisual == .video }
     private var lockVideoURL: URL? { LockVideo.resolvedURL(from: lockVideoPath) }
@@ -56,13 +61,23 @@ struct LockScreenView: View {
                     LockVideoView(
                         url: lockVideoURL,
                         playing: controller.revealed,
+                        // One soundtrack, not one per monitor. Each display gets its
+                        // own AVPlayer, and two copies of the same clip start a few
+                        // milliseconds apart — audible as an echo, which undercuts a
+                        // jump scare rather than doubling it.
+                        muted: !isPrimary,
                         // The clip's own end is the reveal's end: once it's played
                         // through, drop straight back to the bare shield and the
                         // live desktop rather than sitting on a frozen last frame
                         // until the generic countdown expires. That countdown stays
                         // as the backstop for a clip that never reaches its end
                         // (missing codec, failed load).
-                        onFinished: { Task { @MainActor in controller.dismissReveal() } }
+                        //
+                        // Only the primary's copy gets to call it: the mirrors run
+                        // on their own players and would each fire the same
+                        // teardown, and a mirror that stalls shouldn't be able to
+                        // end a reveal the main screen is still playing.
+                        onFinished: isPrimary ? { Task { @MainActor in controller.dismissReveal() } } : nil
                     )
                         .ignoresSafeArea()
                         .opacity(controller.revealed ? 1 : 0)
@@ -178,7 +193,10 @@ struct LockScreenView: View {
 
                     Spacer()
 
-                    // Bottom area
+                    // Bottom area — primary only. A mirrored display can't take a
+                    // click (its window ignores mouse events), so an unlock button
+                    // there would be a dead control inviting a try.
+                    if isPrimary {
                     ZStack {
                         if controller.unlockSucceeded {
                             EmptyView()
@@ -234,6 +252,7 @@ struct LockScreenView: View {
                     .animation(Constants.Anim.gentle, value: controller.isAuthenticating)
                     .animation(Constants.Anim.gentle, value: controller.unlockSucceeded)
                     .offset(x: shakeOffset)
+                    }
                 }
                 // Nothing on the shield draws until the first input attempt — the
                 // screen has to pass for an unlocked desktop, so a stray hint or
@@ -254,7 +273,13 @@ struct LockScreenView: View {
                 // `.id` on the generation is required, not cosmetic:
                 // LAAuthenticationView binds its context permanently at init, so a
                 // re-arm has to build a whole new view.
-                if let touchIDContext = controller.touchIDContext {
+                //
+                // Primary only, and not just for tidiness: a context is single-use
+                // and binds to one view at init, so a second copy on a mirrored
+                // display would race the real one for the same read. Only the
+                // primary window is ever key anyway, which is the condition the
+                // framework refuses to arm without.
+                if isPrimary, let touchIDContext = controller.touchIDContext {
                     VStack {
                         Spacer()
                         HStack {
@@ -341,10 +366,12 @@ struct LockScreenView: View {
 
     /// Attention glow: a few slow breaths (rise to peak, settle to a floor, repeat)
     /// rather than one quick flash — calmer, and reads from across a room.
-    /// Only the primary screen glows (secondary displays show the ambient view).
+    /// Every display running this view glows, mirrored or not — the point of the
+    /// pulse is to be seen from across a room, and a desk where only one of two
+    /// monitors reacts is easier to miss, not harder. A display left on the bare
+    /// scrim has no `LockScreenView` at all, so it never reaches here.
     /// The generation counter cancels a stale pulse chain if a new ping lands mid-sequence.
     private func triggerPingGlow() {
-        guard screenRole == .primary else { return }
         pingGlowGeneration += 1
         let generation = pingGlowGeneration
 
