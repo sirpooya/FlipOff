@@ -3,10 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- **A separate shortcut for unlocking.** One shortcut used to do both jobs, so anyone who watched you lock the Mac also knew how to unlock it. Turn on "Separate unlock shortcut" in Settings > Shortcuts and the lock combo only raises the shield: a second shortcut of your choosing becomes the only key that takes it down. Touch ID and your password still unlock as before. Off by default, and the single-shortcut behaviour is unchanged while it stays off.
 - The update window now lists what actually changed in the release, taken from the changelog, instead of showing a bare link to GitHub.
 
 ### Changed
-- **Touch ID always unlocks instantly, and the "Require authentication" switch is
+- **Touch ID always unlocks instantly, and the "Require authentication" switch is gone.** The sensor is armed the whole time the shield is up, so the switch never disabled it: all it did was make the shortcut ask for a second authentication, which made the faster of the two ways in slower. Settings now says what is true instead of offering a choice that was not really one.
 
 ### Fixed
 - Accessibility permission survives updates. Every new build looked like a different app to macOS, so it quietly stopped trusting FlipOff after each update: the checkbox stayed ticked while the hotkey did nothing, and toggling it off and on could not repair it. Releases are now signed with a stable certificate, so the permission carries over from one version to the next.

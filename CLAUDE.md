@@ -294,6 +294,40 @@ so the gag can be sprung repeatedly on one lock.
   black, so `Coordinator.setPlaying` does one exact-tolerance seek to zero to make a
   paused layer show frame one instead of a black rectangle.
 
+## Lock hotkey vs unlock hotkey
+
+`HotkeyConfig.separateUnlockHotkey` (off by default) splits the one toggle key in
+two: the lock combo raises the shield and does nothing while locked, and a second
+combo becomes the only key that ends the lock. Point of the feature is that
+watching someone lock the machine no longer teaches you how to unlock it. While
+it's off, `unlockKeyCode` / `unlockModifiers` / `unlockDisplay` fall back to the
+lock hotkey, so every caller asks for the unlock combo unconditionally and the
+single-key behaviour is byte-for-byte unchanged.
+
+- **`InputBlocker` matches the *unlock* combo, not the lock one.** That single
+  swap is the whole mechanism: the tap already swallows every key while the shield
+  is up, so once it stops recognising the lock combo, the lock combo is just
+  another swallowed key.
+- **The refusal is stated, not inherited from tap ordering.** `.toggleFlipOff`
+  carries a `HotkeyToggleSource` in `userInfo`, and `LockController` drops a
+  `.lockHotkey` toggle while locked whenever the option is on. In practice the key
+  never gets that far — `InputBlocker`'s tap is head-inserted *after*
+  `HotkeyManager`'s and deletes the event first — but that is an accident of which
+  tap was installed last, not a rule, and a tap re-registered mid-lock would jump
+  the queue. A toggle carrying no source (`flipoff://toggle`) is a deliberate
+  out-of-band request and stays unrestricted.
+- **Collision detection ignores the toggle's current position.** Gating the check
+  on `separateUnlockHotkey` left a way around it: record the unlock combo, switch
+  the option off, record the same combo for lock, switch it back on. A combo on
+  disk still collides the moment the option returns, so
+  `HotkeyConfig.duplicateConflict` refuses the save either way.
+- **An unrecorded unlock default is not a claim on those keys.**
+  `storedUnlockKeyCode` returns nil until the user actually records one, so the
+  lock recorder won't refuse Cmd+Shift+U over a default nobody has seen. The case
+  that leaves — lock hotkey already *is* Cmd+Shift+U when the option goes on — is
+  caught by `unlockCollidesWithLock`, which drives a standing warning in Settings
+  rather than a transient one, because that state outlives the moment it was made.
+
 ## Things intentionally NOT done
 
 - **No sandboxing.** `com.apple.security.app-sandbox = false` in the entitlements —
