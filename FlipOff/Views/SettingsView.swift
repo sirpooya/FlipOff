@@ -505,12 +505,14 @@ struct SettingsView: View {
     private var shortcutSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
             SettingsPanel {
-                SettingsRow("Separate unlock shortcut", subtitle: "Use a different shortcut to unlock, so the lock combo can't undo itself.") {
-                    SettingsSwitch(isOn: $separateUnlockHotkey)
-                        .onChange(of: separateUnlockHotkey) { _, _ in
-                            stopRecording()
-                            hotkeyConflict = nil
-                            NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
+                SettingsRow("Global hotkey", subtitle: "Keep the shortcut active while FlipOff is running.") {
+                    SettingsSwitch(isOn: $hotkeyEnabled)
+                        .onChange(of: hotkeyEnabled) { _, enabled in
+                            NotificationCenter.default.post(
+                                name: .flipOffHotkeyPreferenceChanged,
+                                object: nil,
+                                userInfo: ["enabled": enabled]
+                            )
                         }
                 }
 
@@ -523,6 +525,17 @@ struct SettingsView: View {
                         : "Use one shortcut to lock or unlock."
                 ) {
                     hotkeyRecorderButton(.lock, display: hotkeyDisplay)
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Separate unlock shortcut", subtitle: "Use a different shortcut to unlock, so the lock combo can't undo itself.") {
+                    SettingsSwitch(isOn: $separateUnlockHotkey)
+                        .onChange(of: separateUnlockHotkey) { _, _ in
+                            stopRecording()
+                            hotkeyConflict = nil
+                            NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
+                        }
                 }
 
                 if separateUnlockHotkey {
@@ -539,19 +552,6 @@ struct SettingsView: View {
                     Text(warning)
                         .font(.caption)
                         .foregroundStyle(Color("FlipOffError"))
-                }
-
-                SettingsDivider()
-
-                SettingsRow("Global hotkey", subtitle: "Keep the shortcut active while FlipOff is running.") {
-                    SettingsSwitch(isOn: $hotkeyEnabled)
-                        .onChange(of: hotkeyEnabled) { _, enabled in
-                            NotificationCenter.default.post(
-                                name: .flipOffHotkeyPreferenceChanged,
-                                object: nil,
-                                userInfo: ["enabled": enabled]
-                            )
-                        }
                 }
             }
 
