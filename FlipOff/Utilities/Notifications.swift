@@ -26,3 +26,26 @@ extension Notification.Name {
     /// view could never observe it in time.
     static let flipOffShowOnboarding = Notification.Name("flipOffShowOnboarding")
 }
+
+/// Who asked for a lock/unlock toggle.
+///
+/// `toggleFlipOff` used to be an anonymous "flip the state" signal, which was
+/// fine while one shortcut did both jobs. Once the user can separate them, the
+/// lock shortcut and the unlock shortcut are two different requests, and only
+/// the event tap that saw the key knows which one fired. Posted under
+/// `userInfoKey`; a toggle with no source (the `flipoff://toggle` URL) is a
+/// deliberate out-of-band request and stays unrestricted.
+enum HotkeyToggleSource: String {
+    case lockHotkey
+    case unlockHotkey
+
+    static let userInfoKey = "source"
+
+    /// The `userInfo` dictionary to post this source under.
+    var userInfo: [String: String] { [Self.userInfoKey: rawValue] }
+
+    /// Reads a source back out of a posted notification, if it carried one.
+    static func from(_ notification: Notification) -> HotkeyToggleSource? {
+        (notification.userInfo?[userInfoKey] as? String).flatMap(HotkeyToggleSource.init(rawValue:))
+    }
+}

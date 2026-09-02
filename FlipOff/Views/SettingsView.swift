@@ -77,7 +77,7 @@ struct SettingsView: View {
     @ObservedObject private var updater = UpdateController.shared
 
     @State private var selectedSection: SettingsSection = .lockScreen
-    @State private var recordingTarget: HotkeyTarget?
+    @State private var recordingTarget: HotkeyConfig.HotkeyRole?
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
@@ -463,12 +463,17 @@ struct SettingsView: View {
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private enum HotkeyTarget {
-        case lock
-        case unlock
+    /// Shown when both shortcuts resolve to the same combo while the option is
+    /// on — the feature is enabled but doing nothing. Derived from what is saved
+    /// rather than latched in `onChange`, so it is right the moment the pane
+    /// appears. `hotkeyDisplay` and `unlockHotkeyDisplay` are `@AppStorage`, so
+    /// recording either combo re-evaluates this.
+    private var unlockCollisionWarning: String? {
+        guard separateUnlockHotkey, HotkeyConfig.unlockCollidesWithLock else { return nil }
+        return "Lock and unlock are both \(hotkeyDisplay). Record a different unlock shortcut."
     }
 
-    private func hotkeyRecorderButton(_ target: HotkeyTarget, display: String) -> some View {
+    private func hotkeyRecorderButton(_ target: HotkeyConfig.HotkeyRole, display: String) -> some View {
         let recording = recordingTarget == target
         return Button {
             if recording {
@@ -517,13 +522,17 @@ struct SettingsView: View {
             }
 
             if separateUnlockHotkey {
-                SettingsRow("Unlock", subtitle: "Ends the lock. Only this shortcut does.") {
+                SettingsRow("Unlock", subtitle: "Ends the lock. The lock shortcut won't, though Touch ID still will.") {
                     hotkeyRecorderButton(.unlock, display: unlockHotkeyDisplay)
                 }
             }
 
-            if let conflict = hotkeyConflict {
-                Text(conflict)
+            // A live recording error takes the line while it is on screen;
+            // otherwise the standing collision, which is a property of what is
+            // saved rather than of anything the user just did, so it has to
+            // survive closing and reopening Settings.
+            if let warning = hotkeyConflict ?? unlockCollisionWarning {
+                Text(warning)
                     .font(.caption)
                     .foregroundStyle(Color("FlipOffError"))
             }
@@ -968,7 +977,7 @@ struct SettingsView: View {
 
     // MARK: - Hotkey Recorder
 
-    private func startRecording(_ target: HotkeyTarget) {
+    private func startRecording(_ target: HotkeyConfig.HotkeyRole) {
         stopRecording()
         hotkeyConflict = nil
         recordingTarget = target
@@ -1000,15 +1009,18 @@ struct SettingsView: View {
             if event.modifierFlags.contains(.control) { carbonMods |= controlKey }
 
             // With two shortcuts in play, the same combo for both would silently
-            // collapse the feature back into one toggle.
-            if separateUnlockHotkey {
-                let other = target == .lock
-                    ? (keyCode: HotkeyConfig.unlockKeyCode, mods: HotkeyConfig.unlockModifiers)
-                    : (keyCode: HotkeyConfig.keyCode, mods: HotkeyConfig.modifiers)
-                if Int(event.keyCode) == other.keyCode && carbonMods == other.mods {
-                    hotkeyConflict = "\(display) is already the \(target == .lock ? "unlock" : "lock") shortcut"
-                    return nil
-                }
+            // collapse the feature back into one toggle. Checked whether or not
+            // the option is currently on: gating this on the toggle left a way
+            // around it, since a combo recorded while it is off is still there
+            // waiting to collide the moment it is switched back on.
+            if let duplicate = HotkeyConfig.duplicateConflict(
+                role: target,
+                keyCode: Int(event.keyCode),
+                modifiers: carbonMods,
+                display: display
+            ) {
+                hotkeyConflict = duplicate
+                return nil
             }
 
             switch target {

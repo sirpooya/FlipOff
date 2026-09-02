@@ -15,8 +15,8 @@ class InputBlocker {
     /// combo: the shield is already up, so the only key that matters here is the
     /// one that ends the lock, which is a separate shortcut when the user asked
     /// for one and the lock hotkey otherwise.
-    var cachedKeyCode: Int64 = Int64(HotkeyConfig.defaultKeyCode)
-    var cachedModifiers: Int = HotkeyConfig.defaultModifiers
+    var cachedKeyCode: Int64 = Int64(HotkeyConfig.unlockKeyCode)
+    var cachedModifiers: Int = HotkeyConfig.unlockModifiers
 
     private var hotkeyObserver: NSObjectProtocol?
 
@@ -96,7 +96,11 @@ class InputBlocker {
                     // Let the unlock hotkey through
                     if modifiersMatch && keyCode == savedKeyCode {
                         InputBlocker.inputQueue.async {
-                            NotificationCenter.default.post(name: .toggleFlipOff, object: nil)
+                            NotificationCenter.default.post(
+                                name: .toggleFlipOff,
+                                object: nil,
+                                userInfo: HotkeyToggleSource.unlockHotkey.userInfo
+                            )
                         }
                         return nil
                     }

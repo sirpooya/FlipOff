@@ -78,13 +78,24 @@ class LockController: ObservableObject {
     init() {
         toggleObserver = NotificationCenter.default.addObserver(
             forName: .toggleFlipOff, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self else { return }
+            let source = HotkeyToggleSource.from(notification)
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if self.state == .unlocked {
                     self.lock()
                 } else if self.state == .locked {
+                    // Once the user has asked for a separate unlock shortcut, the
+                    // lock shortcut must not end the lock. In practice it never
+                    // reaches this far — while the shield is up, `InputBlocker`'s
+                    // tap is head-inserted ahead of `HotkeyManager`'s and deletes
+                    // the key first — but that is an ordering accident of which
+                    // tap was installed last, not a rule, and a tap re-registered
+                    // mid-lock would jump the queue. State lives here, so the
+                    // refusal belongs here too.
+                    if source == .lockHotkey && HotkeyConfig.separateUnlockHotkey { return }
+
                     if HotkeyConfig.requiresAuthenticationToUnlock {
                         self.requestUnlock()
                     } else {

@@ -63,7 +63,11 @@ class HotkeyManager {
 
                 if matches {
                     DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .toggleFlipOff, object: nil)
+                        NotificationCenter.default.post(
+                            name: .toggleFlipOff,
+                            object: nil,
+                            userInfo: HotkeyToggleSource.lockHotkey.userInfo
+                        )
                     }
                 }
 
