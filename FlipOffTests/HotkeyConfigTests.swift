@@ -6,11 +6,48 @@ final class HotkeyConfigTests: XCTestCase {
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: HotkeyConfig.requireAuthenticationToUnlockKey)
+        clearUnlockHotkeyDefaults()
     }
 
     override func tearDown() {
+        clearUnlockHotkeyDefaults()
         UserDefaults.standard.removeObject(forKey: HotkeyConfig.requireAuthenticationToUnlockKey)
         super.tearDown()
+    }
+
+    private func clearUnlockHotkeyDefaults() {
+        for key in [
+            HotkeyConfig.separateUnlockHotkeyKey,
+            HotkeyConfig.unlockKeyCodeKey,
+            HotkeyConfig.unlockModifiersKey,
+            HotkeyConfig.unlockDisplayKey
+        ] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }
+
+    // MARK: - Separate unlock hotkey
+
+    func testUnlockHotkeyMirrorsLockHotkeyWhenSeparateIsOff() {
+        XCTAssertFalse(HotkeyConfig.separateUnlockHotkey)
+        XCTAssertEqual(HotkeyConfig.unlockKeyCode, HotkeyConfig.keyCode)
+        XCTAssertEqual(HotkeyConfig.unlockModifiers, HotkeyConfig.modifiers)
+        XCTAssertEqual(HotkeyConfig.unlockDisplay, HotkeyConfig.display)
+    }
+
+    func testUnlockHotkeyIgnoresStoredValueUntilSeparateIsOn() {
+        HotkeyConfig.saveUnlockKeyCode(45)
+        XCTAssertEqual(HotkeyConfig.unlockKeyCode, HotkeyConfig.keyCode)
+
+        HotkeyConfig.saveSeparateUnlockHotkey(true)
+        XCTAssertEqual(HotkeyConfig.unlockKeyCode, 45)
+    }
+
+    func testUnlockHotkeyFallsBackToItsOwnDefaults() {
+        HotkeyConfig.saveSeparateUnlockHotkey(true)
+        XCTAssertEqual(HotkeyConfig.unlockKeyCode, HotkeyConfig.defaultUnlockKeyCode)
+        XCTAssertEqual(HotkeyConfig.unlockModifiers, HotkeyConfig.defaultUnlockModifiers)
+        XCTAssertEqual(HotkeyConfig.unlockDisplay, HotkeyConfig.defaultUnlockDisplay)
     }
 
     // MARK: - Unlock authentication preference

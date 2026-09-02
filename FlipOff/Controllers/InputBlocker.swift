@@ -11,7 +11,10 @@ class InputBlocker {
     private static let inputQueue = DispatchQueue(label: "in.pooya.flipoff.input", qos: .userInteractive)
 
     /// Cached hotkey values — read once, used in the event tap callback
-    /// to avoid hitting UserDefaults on every keystroke.
+    /// to avoid hitting UserDefaults on every keystroke. This is the *unlock*
+    /// combo: the shield is already up, so the only key that matters here is the
+    /// one that ends the lock, which is a separate shortcut when the user asked
+    /// for one and the lock hotkey otherwise.
     var cachedKeyCode: Int64 = Int64(HotkeyConfig.defaultKeyCode)
     var cachedModifiers: Int = HotkeyConfig.defaultModifiers
 
@@ -47,8 +50,8 @@ class InputBlocker {
 
     /// Refresh cached hotkey key-code and modifiers from HotkeyConfig.
     func reloadHotkeyConfig() {
-        cachedKeyCode = Int64(HotkeyConfig.keyCode)
-        cachedModifiers = HotkeyConfig.modifiers
+        cachedKeyCode = Int64(HotkeyConfig.unlockKeyCode)
+        cachedModifiers = HotkeyConfig.unlockModifiers
     }
 
     func startBlocking() {
