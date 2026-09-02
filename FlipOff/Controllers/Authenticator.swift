@@ -14,7 +14,9 @@ class Authenticator {
     /// True only where a biometric sensor actually exists and is enrolled. Macs
     /// without Touch ID fail `canEvaluatePolicy` instantly, so the passive
     /// listener must check this once rather than re-arming into a busy loop.
-    var isBiometricsAvailable: Bool {
+    /// Static because it reads nothing off the instance, and Settings wants the
+    /// answer for its Touch ID banner without owning an `Authenticator`.
+    static var isBiometricsAvailable: Bool {
         var error: NSError?
         return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
     }

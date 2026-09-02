@@ -15,7 +15,6 @@ struct LockScreenView: View {
     @AppStorage(EmojiMascot.storageKey) private var mascotEmoji = EmojiMascot.defaultValue
     @AppStorage(LockVisual.storageKey) private var lockVisual = LockVisual.defaultValue
     @AppStorage(LockVideo.storageKey) private var lockVideoPath = LockVideo.defaultValue
-    @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
     @AppStorage(Constants.Backdrop.dimKey) private var backdropDim = Constants.Backdrop.defaultDim
 
     @State private var phase: CGFloat = 0
@@ -224,7 +223,7 @@ struct LockScreenView: View {
                                     NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
                                     controller.requestUnlock()
                                 } label: {
-                                    Text(requiresAuthenticationToUnlock ? "Authenticate to Unlock" : "Authenticate with Touch ID")
+                                    Text("Authenticate with Touch ID")
                                         .font(.lockLabel)
                                         .foregroundStyle(.white.opacity(hoveringAuth ? 0.6 : 0.4))
                                         .tracking(0.3)

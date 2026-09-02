@@ -68,7 +68,6 @@ struct SettingsView: View {
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
     @AppStorage(HotkeyConfig.separateUnlockHotkeyKey) private var separateUnlockHotkey = HotkeyConfig.defaultSeparateUnlockHotkey
     @AppStorage(HotkeyConfig.unlockDisplayKey) private var unlockHotkeyDisplay = HotkeyConfig.defaultUnlockDisplay
-    @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
     @AppStorage(Constants.cameraOnFailedUnlockKey) private var cameraOnFailedUnlock = Constants.defaultCameraOnFailedUnlock
     @AppStorage(Constants.showRevealOnAllDisplaysKey) private var showRevealOnAllDisplays = Constants.defaultShowRevealOnAllDisplays
@@ -85,6 +84,9 @@ struct SettingsView: View {
     @State private var accessibilityTimer: Timer?
     @State private var copiedItem: String?
     @State private var agentSetupResults: [String: AgentSetupResult] = [:]
+    /// Read once in `onAppear` rather than per body evaluation: the probe builds
+    /// an `LAContext` every call, and enrollment does not change under the window.
+    @State private var touchIDAvailable = false
 
     init() {
     }
@@ -113,6 +115,7 @@ struct SettingsView: View {
             }
             applyAppearance(appearanceMode)
             startAccessibilityPolling()
+            touchIDAvailable = Authenticator.isBiometricsAvailable
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshAccessibilityStatus()
@@ -500,61 +503,68 @@ struct SettingsView: View {
     }
 
     private var shortcutSettings: some View {
-        SettingsPanel {
-            SettingsRow(
-                separateUnlockHotkey ? "Lock" : "Lock / Unlock",
-                subtitle: separateUnlockHotkey
-                    ? "Raises the shield. It won't take it down again."
-                    : "Use one shortcut to lock or unlock."
-            ) {
-                hotkeyRecorderButton(.lock, display: hotkeyDisplay)
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsPanel {
+                SettingsRow(
+                    separateUnlockHotkey ? "Lock" : "Lock / Unlock",
+                    subtitle: separateUnlockHotkey
+                        ? "Raises the shield. It won't take it down again."
+                        : "Use one shortcut to lock or unlock."
+                ) {
+                    hotkeyRecorderButton(.lock, display: hotkeyDisplay)
+                }
 
-            SettingsDivider()
+                SettingsDivider()
 
-            SettingsRow("Separate unlock shortcut", subtitle: "Use a different shortcut to unlock, so the lock combo can't undo itself.") {
-                SettingsSwitch(isOn: $separateUnlockHotkey)
-                    .onChange(of: separateUnlockHotkey) { _, _ in
-                        stopRecording()
-                        hotkeyConflict = nil
-                        NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
+                SettingsRow("Separate unlock shortcut", subtitle: "Use a different shortcut to unlock, so the lock combo can't undo itself.") {
+                    SettingsSwitch(isOn: $separateUnlockHotkey)
+                        .onChange(of: separateUnlockHotkey) { _, _ in
+                            stopRecording()
+                            hotkeyConflict = nil
+                            NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
+                        }
+                }
+
+                if separateUnlockHotkey {
+                    SettingsRow("Unlock", subtitle: "Ends the lock. The lock shortcut won't, though Touch ID still will.") {
+                        hotkeyRecorderButton(.unlock, display: unlockHotkeyDisplay)
                     }
-            }
+                }
 
-            if separateUnlockHotkey {
-                SettingsRow("Unlock", subtitle: "Ends the lock. The lock shortcut won't, though Touch ID still will.") {
-                    hotkeyRecorderButton(.unlock, display: unlockHotkeyDisplay)
+                // A live recording error takes the line while it is on screen;
+                // otherwise the standing collision, which is a property of what is
+                // saved rather than of anything the user just did, so it has to
+                // survive closing and reopening Settings.
+                if let warning = hotkeyConflict ?? unlockCollisionWarning {
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(Color("FlipOffError"))
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Global hotkey", subtitle: "Keep the shortcut active while FlipOff is running.") {
+                    SettingsSwitch(isOn: $hotkeyEnabled)
+                        .onChange(of: hotkeyEnabled) { _, enabled in
+                            NotificationCenter.default.post(
+                                name: .flipOffHotkeyPreferenceChanged,
+                                object: nil,
+                                userInfo: ["enabled": enabled]
+                            )
+                        }
                 }
             }
 
-            // A live recording error takes the line while it is on screen;
-            // otherwise the standing collision, which is a property of what is
-            // saved rather than of anything the user just did, so it has to
-            // survive closing and reopening Settings.
-            if let warning = hotkeyConflict ?? unlockCollisionWarning {
-                Text(warning)
-                    .font(.caption)
-                    .foregroundStyle(Color("FlipOffError"))
-            }
-
-            SettingsDivider()
-
-            SettingsRow("Require authentication", subtitle: "Touch ID or your Mac password is needed to unlock. Touch the sensor any time while locked.") {
-                SettingsSwitch(isOn: $requiresAuthenticationToUnlock)
-            }
-
-            SettingsDivider()
-
-            SettingsRow("Global hotkey", subtitle: "Keep the shortcut active while FlipOff is running.") {
-                SettingsSwitch(isOn: $hotkeyEnabled)
-                    .onChange(of: hotkeyEnabled) { _, enabled in
-                        NotificationCenter.default.post(
-                            name: .flipOffHotkeyPreferenceChanged,
-                            object: nil,
-                            userInfo: ["enabled": enabled]
-                        )
-                    }
-            }
+            // Below the card, not inside it. Every row in that panel is
+            // something to set; this is something that is simply true, and
+            // sitting among the controls it read as one more setting whose
+            // switch had gone missing.
+            SettingsNote(
+                systemImage: touchIDAvailable ? "touchid" : "key.fill",
+                text: touchIDAvailable
+                    ? "Touch ID unlocks instantly. Rest a finger on the sensor any time while locked, or use the shortcut."
+                    : "No Touch ID on this Mac. Use the shortcut, or click Authenticate on the lock screen to unlock with your password."
+            )
         }
     }
 
@@ -1253,6 +1263,47 @@ private struct SettingsSwitch: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .tint(settingsAccentColor)
+    }
+}
+
+/// A footnote strip for state the user should know but cannot change. Lives
+/// *outside* `SettingsPanel`, under the card it annotates.
+///
+/// Deliberately colourless: an accent tint made it read as a status badge
+/// (warning? success?) when it is neither, and the accent is already spoken for
+/// by the controls above. A near-transparent plate off `Color.primary` keeps it
+/// a shade away from the window in both appearances without hardcoding either.
+private struct SettingsNote: View {
+    let systemImage: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 19, weight: .regular))
+                // Monochrome, not hierarchical: `touchid` splits into a pale
+                // outer ring and a solid print, which at this size read as two
+                // greys arguing rather than one glyph.
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(.secondary)
+                .frame(width: 21)
+
+            Text(text)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineSpacing(1.5)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        )
     }
 }
 

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
     <channel>
-        <title>Bilakh</title>
-        <link>https://raw.githubusercontent.com/sirpooya/osx-bilakh-locksceen/main/appcast.xml</link>
-        <description>Most recent changes to Bilakh.</description>
+        <title>FlipOff</title>
+        <link>https://raw.githubusercontent.com/sirpooya/flipoff-lockscreen/main/appcast.xml</link>
+        <description>Most recent changes to FlipOff.</description>
         <language>en</language>
         <item>
             <title>1.5.0</title>

@@ -96,11 +96,11 @@ class LockController: ObservableObject {
                     // refusal belongs here too.
                     if source == .lockHotkey && HotkeyConfig.separateUnlockHotkey { return }
 
-                    if HotkeyConfig.requiresAuthenticationToUnlock {
-                        self.requestUnlock()
-                    } else {
-                        self.quickUnlock()
-                    }
+                    // Otherwise the hotkey unlocks outright. Touch ID is armed the
+                    // whole time the shield is up and unlocks on its own, so
+                    // gating the shortcut behind a second auth only ever made the
+                    // faster of the two paths slower.
+                    self.quickUnlock()
                 }
             }
         }

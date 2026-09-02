@@ -110,10 +110,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             showOnboarding()
         } else if !AccessibilityChecker.isEnabled {
-            // TCC was reset (e.g., after update) — re-show onboarding to guide re-granting
-            logger.notice("Accessibility revoked — re-showing onboarding")
-            UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
-            showOnboarding()
+            // Access can read untrusted on a build the user already set up: TCC pins
+            // its grant to a code signature, so anything that changes the signature
+            // drops it (see CLAUDE.md > Signing). That is a permission to repair, not
+            // a first run, so `hasCompletedOnboarding` stays set and the flow opens
+            // straight on the permissions step.
+            //
+            // Wiping the flag here is what made v1.5.0 feel like a factory reset:
+            // an update walked the user back through welcome and hotkey setup, then
+            // parked them on "Waiting for access..." that a stale grant could never
+            // satisfy, with the checkbox in System Settings already ticked. Never
+            // treat a missing permission as "never onboarded".
+            logger.notice("Accessibility not granted; opening permissions step")
+            showOnboarding(startingAt: 2)
         }
     }
 

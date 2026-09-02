@@ -81,6 +81,30 @@ a snoop mashing the keyboard doesn't fill Downloads with duplicates. Never block
 throws into the lock path: a missing camera, a denied permission, or a capture error
 all just log and return.
 
+## Changelog
+
+After any user-visible or behavioral change, log it:
+
+```bash
+python3 ~/Documents/GitHub/claude-skills/skills/release/changelog.py add <type> "<entry>"
+```
+
+Types: `added changed deprecated removed fixed security`. Write the entry for
+someone reading release notes, not a commit message. Skip pure refactors,
+formatting, and doc-only edits. Releases are cut with the `release` skill, which
+turns `[Unreleased]` into a versioned section.
+
+**This is not bookkeeping, it is the shipped artifact.** `CHANGELOG.md` is the
+only source of release notes: `scripts/changelog-notes.py` reads the section for
+the version being tagged and `release.yml` feeds it to two places, the GitHub
+Release body (as markdown) and Sparkle's `<description>` (converted to HTML,
+because Sparkle renders that field as HTML and raw markdown would reach the user
+as literal asterisks). An untagged version with no section fails the release in
+its first step, before the build, rather than publishing an update whose notes
+are blank. Up to v1.5.0 the notes came from `gh release create --generate-notes`
+instead, so every update window showed nothing but a "Full Changelog" compare
+link.
+
 ## Signing
 
 `project.yml` sets `CODE_SIGN_STYLE: Automatic` + `DEVELOPMENT_TEAM: 37MA269X54` on
@@ -101,6 +125,45 @@ Developer ID Application cert, which isn't in the keychain. Fine for local use o
 your own Macs; the released `.zip` shows a Gatekeeper warning on first open
 (right-click → Open).
 
+**Releases are signed with the Apple Development cert, and that is what keeps TCC
+grants alive across updates.** `release.yml`'s "Import signing identity" step
+imports a `.p12` from the `SIGNING_CERTIFICATE_P12` / `SIGNING_CERTIFICATE_PASSWORD`
+secrets into a throwaway keychain and signs the bundle with it. The reason is not
+Gatekeeper (still unnotarized, still warns) but the *designated requirement*.
+Ad-hoc has no certificate, so codesign can only pin the requirement to the build
+itself:
+
+```
+designated => cdhash H"708f5b07…"          # ad-hoc: one exact build
+designated => identifier "in.pooya.flipoff" and anchor apple generic
+                and certificate leaf[subject.CN] = "Apple Development: …"
+```
+
+TCC stores that requirement verbatim in `access.csreq`, so with the ad-hoc form
+the *next* release, whose cdhash differs by construction, no longer satisfies the
+grant. What the user sees is the worst possible failure: `auth_value` stays `2`,
+so System Settings keeps showing the checkbox ticked while `tccd` denies every
+call, and toggling the checkbox rewrites only `auth_value`, never the pinned
+`csreq` — so the grant cannot be repaired from the UI at all. The only fixes are
+`tccutil reset Accessibility in.pooya.flipoff` or removing the row with the `−`
+button. That is the v1.5.0 bug report. The cert form carries no cdhash and so
+survives every rebuild. Diagnosing a recurrence:
+
+```bash
+sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \
+  "select service,client,auth_value from access where client like '%flipoff%';"
+# then decode the pinned requirement and compare against the installed build:
+sqlite3 … "select hex(csreq) from access where client='in.pooya.flipoff';" \
+  | xxd -r -p > /tmp/csreq.bin && csreq -r /tmp/csreq.bin -t
+codesign -d --verbose=4 /Applications/FlipOff.app 2>&1 | grep '^CDHash'
+```
+
+The release fails if the resulting requirement still contains a `cdhash`, so this
+cannot regress silently the way v1.2.0 and v1.5.0 both did. Two caveats: the cert
+expires Jul 2027 (renewing it changes the leaf CN, which resets grants once), and
+signing falls back to ad-hoc with a warning when the secret is absent, so a
+secretless run still builds but reintroduces the pin.
+
 **Released builds must be ad-hoc signed as a bundle, and `CODE_SIGNING_ALLOWED=NO`
 does not do that.** That flag leaves only a *linker* ad-hoc signature on the
 executable: `codesign -dv` reports `Sealed Resources=none` and `Info.plist=not
@@ -109,9 +172,9 @@ bundle in that state, so **Accessibility silently never persists** — the user 
 it, relaunches, and the app still reads untrusted. This shipped in v1.2.0. `release
 .yml` now runs an explicit `codesign --sign -` pass (nested Sparkle helpers first,
 deepest-first, then the app with entitlements) and fails the release if either
-marker comes back wrong. Caveat that remains: an ad-hoc cdhash changes every build,
-so the Accessibility grant resets on each update — macOS shows it enabled but stale,
-and the user has to toggle it off/on. Only a Developer ID cert fixes that for good.
+marker comes back wrong. The `--sign -` in that pass is now `--sign "$SIGN_ID"`,
+ad-hoc only as the no-secret fallback; see the certificate note above for why that
+distinction decides whether Accessibility survives the next update.
 
 ## Auto-update (Sparkle)
 

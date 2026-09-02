@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- The update window now lists what actually changed in the release, taken from the changelog, instead of showing a bare link to GitHub.
+
+### Changed
+- **Touch ID always unlocks instantly, and the "Require authentication" switch is
+
+### Fixed
+- Accessibility permission survives updates. Every new build looked like a different app to macOS, so it quietly stopped trusting FlipOff after each update: the checkbox stayed ticked while the hotkey did nothing, and toggling it off and on could not repair it. Releases are now signed with a stable certificate, so the permission carries over from one version to the next.
+- Updating no longer looks like a fresh install. If FlipOff could not see its Accessibility permission it used to forget that you had ever set it up and restart onboarding from the welcome screen, only to strand you on the access step. It now opens straight to the access step as a repair and remembers your setup.
+
 ## [1.5.0] - 2026-09-01
 
 ### Added

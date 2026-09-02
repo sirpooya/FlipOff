@@ -16,13 +16,11 @@ final class HotkeyConfigTests: XCTestCase {
         super.setUp()
         savedLockKeyCode = UserDefaults.standard.object(forKey: "hotkeyKeyCode")
         savedLockModifiers = UserDefaults.standard.object(forKey: "hotkeyModifiers")
-        UserDefaults.standard.removeObject(forKey: HotkeyConfig.requireAuthenticationToUnlockKey)
         clearUnlockHotkeyDefaults()
     }
 
     override func tearDown() {
         clearUnlockHotkeyDefaults()
-        UserDefaults.standard.removeObject(forKey: HotkeyConfig.requireAuthenticationToUnlockKey)
         restore(savedLockKeyCode, forKey: "hotkeyKeyCode")
         restore(savedLockModifiers, forKey: "hotkeyModifiers")
         super.tearDown()
@@ -151,20 +149,6 @@ final class HotkeyConfigTests: XCTestCase {
         HotkeyConfig.saveSeparateUnlockHotkey(true)
 
         XCTAssertTrue(HotkeyConfig.unlockCollidesWithLock)
-    }
-
-    // MARK: - Unlock authentication preference
-
-    func testRequiresAuthenticationToUnlockDefaultsToFalse() {
-        XCTAssertFalse(HotkeyConfig.requiresAuthenticationToUnlock)
-    }
-
-    func testRequiresAuthenticationToUnlockPersists() {
-        HotkeyConfig.saveRequireAuthenticationToUnlock(true)
-        XCTAssertTrue(HotkeyConfig.requiresAuthenticationToUnlock)
-
-        HotkeyConfig.saveRequireAuthenticationToUnlock(false)
-        XCTAssertFalse(HotkeyConfig.requiresAuthenticationToUnlock)
     }
 
     // MARK: - System conflict detection
