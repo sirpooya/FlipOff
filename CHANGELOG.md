@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-02
+
 ### Added
 - **A separate shortcut for unlocking.** One shortcut used to do both jobs, so anyone who watched you lock the Mac also knew how to unlock it. Turn on "Separate unlock shortcut" in Settings > Shortcuts and the lock combo only raises the shield: a second shortcut of your choosing becomes the only key that takes it down. Touch ID and your password still unlock as before. Off by default, and the single-shortcut behaviour is unchanged while it stays off.
 - The update window now lists what actually changed in the release, taken from the changelog, instead of showing a bare link to GitHub.
