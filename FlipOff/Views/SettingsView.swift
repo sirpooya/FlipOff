@@ -505,17 +505,6 @@ struct SettingsView: View {
     private var shortcutSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
             SettingsPanel {
-                SettingsRow(
-                    separateUnlockHotkey ? "Lock" : "Lock / Unlock",
-                    subtitle: separateUnlockHotkey
-                        ? "Raises the shield. It won't take it down again."
-                        : "Use one shortcut to lock or unlock."
-                ) {
-                    hotkeyRecorderButton(.lock, display: hotkeyDisplay)
-                }
-
-                SettingsDivider()
-
                 SettingsRow("Separate unlock shortcut", subtitle: "Use a different shortcut to unlock, so the lock combo can't undo itself.") {
                     SettingsSwitch(isOn: $separateUnlockHotkey)
                         .onChange(of: separateUnlockHotkey) { _, _ in
@@ -523,6 +512,17 @@ struct SettingsView: View {
                             hotkeyConflict = nil
                             NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
                         }
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    separateUnlockHotkey ? "Lock" : "Lock / Unlock",
+                    subtitle: separateUnlockHotkey
+                        ? "Raises the shield. It won't take it down again."
+                        : "Use one shortcut to lock or unlock."
+                ) {
+                    hotkeyRecorderButton(.lock, display: hotkeyDisplay)
                 }
 
                 if separateUnlockHotkey {
