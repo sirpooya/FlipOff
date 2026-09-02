@@ -66,6 +66,8 @@ struct SettingsView: View {
     @State private var customEmojiInput = ""
     @FocusState private var customEmojiFieldFocused: Bool
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
+    @AppStorage(HotkeyConfig.separateUnlockHotkeyKey) private var separateUnlockHotkey = HotkeyConfig.defaultSeparateUnlockHotkey
+    @AppStorage(HotkeyConfig.unlockDisplayKey) private var unlockHotkeyDisplay = HotkeyConfig.defaultUnlockDisplay
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
     @AppStorage(Constants.cameraOnFailedUnlockKey) private var cameraOnFailedUnlock = Constants.defaultCameraOnFailedUnlock
@@ -75,7 +77,7 @@ struct SettingsView: View {
     @ObservedObject private var updater = UpdateController.shared
 
     @State private var selectedSection: SettingsSection = .lockScreen
-    @State private var isRecording = false
+    @State private var recordingTarget: HotkeyTarget?
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
@@ -461,31 +463,63 @@ struct SettingsView: View {
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    private enum HotkeyTarget {
+        case lock
+        case unlock
+    }
+
+    private func hotkeyRecorderButton(_ target: HotkeyTarget, display: String) -> some View {
+        let recording = recordingTarget == target
+        return Button {
+            if recording {
+                stopRecording()
+            } else {
+                startRecording(target)
+            }
+        } label: {
+            Text(recording ? "Press shortcut…" : display)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(recording ? settingsAccentColor : .primary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(recording ? settingsAccentColor.opacity(0.12) : Color(.controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(recording ? settingsAccentColor.opacity(0.45) : Color(.separatorColor), lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var shortcutSettings: some View {
         SettingsPanel {
-            SettingsRow("Lock / Unlock", subtitle: "Use one shortcut to lock or unlock.") {
-                Button {
-                    if isRecording {
+            SettingsRow(
+                separateUnlockHotkey ? "Lock" : "Lock / Unlock",
+                subtitle: separateUnlockHotkey
+                    ? "Raises the shield. It won't take it down again."
+                    : "Use one shortcut to lock or unlock."
+            ) {
+                hotkeyRecorderButton(.lock, display: hotkeyDisplay)
+            }
+
+            SettingsDivider()
+
+            SettingsRow("Separate unlock shortcut", subtitle: "Use a different shortcut to unlock, so the lock combo can't undo itself.") {
+                SettingsSwitch(isOn: $separateUnlockHotkey)
+                    .onChange(of: separateUnlockHotkey) { _, _ in
                         stopRecording()
-                    } else {
-                        startRecording()
+                        hotkeyConflict = nil
+                        NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
                     }
-                } label: {
-                    Text(isRecording ? "Press shortcut…" : hotkeyDisplay)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(isRecording ? settingsAccentColor : .primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(isRecording ? settingsAccentColor.opacity(0.12) : Color(.controlBackgroundColor))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(isRecording ? settingsAccentColor.opacity(0.45) : Color(.separatorColor), lineWidth: 0.5)
-                        )
+            }
+
+            if separateUnlockHotkey {
+                SettingsRow("Unlock", subtitle: "Ends the lock. Only this shortcut does.") {
+                    hotkeyRecorderButton(.unlock, display: unlockHotkeyDisplay)
                 }
-                .buttonStyle(.plain)
             }
 
             if let conflict = hotkeyConflict {
@@ -934,9 +968,10 @@ struct SettingsView: View {
 
     // MARK: - Hotkey Recorder
 
-    private func startRecording() {
+    private func startRecording(_ target: HotkeyTarget) {
+        stopRecording()
         hotkeyConflict = nil
-        isRecording = true
+        recordingTarget = target
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             var parts: [String] = []
             if event.modifierFlags.contains(.command) { parts.append("Cmd") }
@@ -964,10 +999,30 @@ struct SettingsView: View {
             if event.modifierFlags.contains(.option) { carbonMods |= optionKey }
             if event.modifierFlags.contains(.control) { carbonMods |= controlKey }
 
-            HotkeyConfig.saveKeyCode(Int(event.keyCode))
-            HotkeyConfig.saveModifiers(carbonMods)
-            HotkeyConfig.saveDisplay(display)
-            hotkeyDisplay = display
+            // With two shortcuts in play, the same combo for both would silently
+            // collapse the feature back into one toggle.
+            if separateUnlockHotkey {
+                let other = target == .lock
+                    ? (keyCode: HotkeyConfig.unlockKeyCode, mods: HotkeyConfig.unlockModifiers)
+                    : (keyCode: HotkeyConfig.keyCode, mods: HotkeyConfig.modifiers)
+                if Int(event.keyCode) == other.keyCode && carbonMods == other.mods {
+                    hotkeyConflict = "\(display) is already the \(target == .lock ? "unlock" : "lock") shortcut"
+                    return nil
+                }
+            }
+
+            switch target {
+            case .lock:
+                HotkeyConfig.saveKeyCode(Int(event.keyCode))
+                HotkeyConfig.saveModifiers(carbonMods)
+                HotkeyConfig.saveDisplay(display)
+                hotkeyDisplay = display
+            case .unlock:
+                HotkeyConfig.saveUnlockKeyCode(Int(event.keyCode))
+                HotkeyConfig.saveUnlockModifiers(carbonMods)
+                HotkeyConfig.saveUnlockDisplay(display)
+                unlockHotkeyDisplay = display
+            }
             hotkeyConflict = nil
             stopRecording()
 
@@ -978,7 +1033,7 @@ struct SettingsView: View {
     }
 
     private func stopRecording() {
-        isRecording = false
+        recordingTarget = nil
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil

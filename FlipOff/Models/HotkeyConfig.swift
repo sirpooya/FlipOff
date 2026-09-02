@@ -8,11 +8,21 @@ struct HotkeyConfig {
     private static let enabledKey = "hotkeyEnabled"
     static let requireAuthenticationToUnlockKey = "requireAuthenticationToUnlock"
 
+    static let separateUnlockHotkeyKey = "separateUnlockHotkey"
+    static let unlockKeyCodeKey = "unlockHotkeyKeyCode"
+    static let unlockModifiersKey = "unlockHotkeyModifiers"
+    static let unlockDisplayKey = "unlockHotkeyDisplay"
+
     static let defaultKeyCode = 37
     static let defaultModifiers = cmdKey | shiftKey
     static let defaultDisplay = "Cmd+Shift+L"
     static let defaultEnabled = true
     static let defaultRequireAuthenticationToUnlock = false
+
+    static let defaultSeparateUnlockHotkey = false
+    static let defaultUnlockKeyCode = 32
+    static let defaultUnlockModifiers = cmdKey | shiftKey
+    static let defaultUnlockDisplay = "Cmd+Shift+U"
 
     static var keyCode: Int {
         UserDefaults.standard.object(forKey: keyCodeKey) as? Int ?? defaultKeyCode
@@ -28,6 +38,27 @@ struct HotkeyConfig {
 
     static var enabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? defaultEnabled
+    }
+
+    static var separateUnlockHotkey: Bool {
+        UserDefaults.standard.object(forKey: separateUnlockHotkeyKey) as? Bool ?? defaultSeparateUnlockHotkey
+    }
+
+    /// The combo that ends a lock. Falls back to the lock hotkey whenever the
+    /// separate-unlock option is off, so every caller can ask for it unconditionally.
+    static var unlockKeyCode: Int {
+        guard separateUnlockHotkey else { return keyCode }
+        return UserDefaults.standard.object(forKey: unlockKeyCodeKey) as? Int ?? defaultUnlockKeyCode
+    }
+
+    static var unlockModifiers: Int {
+        guard separateUnlockHotkey else { return modifiers }
+        return UserDefaults.standard.object(forKey: unlockModifiersKey) as? Int ?? defaultUnlockModifiers
+    }
+
+    static var unlockDisplay: String {
+        guard separateUnlockHotkey else { return display }
+        return UserDefaults.standard.string(forKey: unlockDisplayKey) ?? defaultUnlockDisplay
     }
 
     static var requiresAuthenticationToUnlock: Bool {
@@ -52,6 +83,22 @@ struct HotkeyConfig {
 
     static func saveRequireAuthenticationToUnlock(_ value: Bool) {
         UserDefaults.standard.set(value, forKey: requireAuthenticationToUnlockKey)
+    }
+
+    static func saveSeparateUnlockHotkey(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: separateUnlockHotkeyKey)
+    }
+
+    static func saveUnlockKeyCode(_ value: Int) {
+        UserDefaults.standard.set(value, forKey: unlockKeyCodeKey)
+    }
+
+    static func saveUnlockModifiers(_ value: Int) {
+        UserDefaults.standard.set(value, forKey: unlockModifiersKey)
+    }
+
+    static func saveUnlockDisplay(_ value: String) {
+        UserDefaults.standard.set(value, forKey: unlockDisplayKey)
     }
 
     // MARK: - System Shortcut Conflict Detection
