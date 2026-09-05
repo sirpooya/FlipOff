@@ -66,7 +66,10 @@ enum LockVisual: String, CaseIterable, Identifiable {
 enum LockVideo {
     /// Filename (no extension) of the bundled template in Resources/Videos.
     static let templateResourceName = "creepy-face-jump-scare"
-    static let templateDisplayName = "Creepy Face (built-in)"
+    /// No "(built-in)" qualifier. The template already leads the menu and is the
+    /// only entry the user did not name themselves, so the tag said nothing the
+    /// position didn't, and it read as part of the clip's title.
+    static let templateDisplayName = "Creepy Face"
 
     /// UserDefaults key holding the absolute path of an imported clip. Empty or
     /// absent means "use the template".

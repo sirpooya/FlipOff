@@ -13,10 +13,22 @@ class LockController: ObservableObject {
     /// that can't reach the instance — the controller is a `@StateObject` owned by
     /// `FlipOffApp`, but `UpdateController` is a singleton with no handle on it and
     /// needs to know whether a Sparkle dialog would land on top of a live shield.
-    /// Maintained solely by `transitionTo`, alongside `state`.
+    /// Maintained by `state`'s `didSet`, so it cannot drift.
+    ///
+    /// It used to be written in `transitionTo` alongside `state`, which was true
+    /// of every path *into* a lock and of none of the paths out: `unlock()` and
+    /// `forceUnlock()` both assign `state` directly, so the flag stayed `true`
+    /// forever after the first lock and `UpdateController` quietly stopped
+    /// checking for updates. Deriving it from the property itself is the only
+    /// version that survives a direct assignment.
     static private(set) var isAnyLockActive = false
 
-    @Published private(set) var state: LockState = .unlocked
+    @Published private(set) var state: LockState = .unlocked {
+        didSet {
+            LockController.isAnyLockActive = (state != .unlocked)
+            refreshHotCornerMonitoring()
+        }
+    }
     @Published var lockStartTime: Date?
     @Published var elapsedTime: TimeInterval = 0
     @Published private(set) var isAuthenticating = false
@@ -51,6 +63,7 @@ class LockController: ObservableObject {
     private let inputBlocker = InputBlocker()
     private let authenticator = Authenticator()
     private let sleepPreventer = SleepPreventer()
+    private let hotCornerMonitor = HotCornerMonitor()
 
     private var timer: Timer?
     private var sleepObserver: Any?
@@ -67,6 +80,7 @@ class LockController: ObservableObject {
     private var unlockObserver: Any?
     private var unlockPasswordObserver: Any?
     private var pingObserver: Any?
+    private var hotCornerObserver: Any?
     private var authenticationInProgress = false
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
@@ -242,6 +256,51 @@ class LockController: ObservableObject {
                 self?.handlePing()
             }
         }
+
+        hotCornerObserver = NotificationCenter.default.addObserver(
+            forName: .flipOffHotCornerPreferenceChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshHotCornerMonitoring()
+            }
+        }
+
+        hotCornerMonitor.onTrigger = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.state == .unlocked else { return }
+                self.lock()
+            }
+        }
+
+        // The `didSet` above can't cover the initial value, so the monitor is
+        // started by hand once here and left to that hook from then on.
+        refreshHotCornerMonitoring()
+    }
+
+    /// Poll for the corner only while it could actually do something: the setting
+    /// is on, onboarding is done, and nothing is locked.
+    ///
+    /// The lock-state half is not just a saving. Left running under the shield the
+    /// corner would keep firing `lock()` into a machine that is already locked, and
+    /// on the way back out the pointer is usually still parked in the corner that
+    /// fired — the monitor re-arms only after the pointer leaves, but it can only
+    /// do that if it is stopped and restarted around the lock, which is what this
+    /// gives it.
+    ///
+    /// `hasCompletedOnboarding` is checked because the welcome window is the one
+    /// place a lock is actively unwelcome: the user is still being told what the
+    /// app does and has not yet granted Accessibility, so a corner triggered while
+    /// reading step 2 produces nothing but a failed lock and a permissions prompt.
+    private func refreshHotCornerMonitoring() {
+        let shouldRun = state == .unlocked
+            && HotCornerConfig.enabled
+            && UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+
+        if shouldRun {
+            hotCornerMonitor.start()
+        } else {
+            hotCornerMonitor.stop()
+        }
     }
 
     deinit {
@@ -257,6 +316,7 @@ class LockController: ObservableObject {
         if let obs = sessionActiveObserver { NSWorkspace.shared.notificationCenter.removeObserver(obs) }
         if let obs = inputBlockerFailedObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = pingObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = hotCornerObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = inputAttemptObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = overlayKeyObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = dismissRevealObserver { NotificationCenter.default.removeObserver(obs) }
@@ -305,14 +365,10 @@ class LockController: ObservableObject {
                     phaseOffset: CGFloat(index) * 0.15
                 ))
             }
-            // Secondary displays either mirror the whole reveal or stay bare scrim.
-            // Mirroring is the default: on a two-monitor desk the mascot landing on
-            // one screen while the other just dims reads as a glitch, not a gag.
-            let mirrorEverywhere = UserDefaults.standard.object(forKey: Constants.showRevealOnAllDisplaysKey) as? Bool
-                ?? Constants.defaultShowRevealOnAllDisplays
-            guard mirrorEverywhere else {
-                return AnyView(AmbientBackdropHost(controller: self))
-            }
+            // Every secondary display mirrors the whole reveal — not a setting.
+            // On a two-monitor desk the mascot landing on one screen while the
+            // other merely dims reads as a glitch rather than a gag, so the
+            // bare-scrim alternative was never the one anybody wanted.
             return AnyView(LockScreenView(
                 controller: self,
                 screenRole: .ambient,
@@ -640,7 +696,6 @@ class LockController: ObservableObject {
             return false
         }
         state = newState
-        LockController.isAnyLockActive = (newState != .unlocked)
         return true
     }
 

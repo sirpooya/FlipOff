@@ -44,7 +44,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     var subtitle: String {
         switch self {
         case .lockScreen: return "Mascot, displays, and lock message"
-        case .shortcuts: return "Hotkey and unlock options"
+        case .shortcuts: return "Hotkey, hot corner, and unlock options"
         case .general: return "Startup, appearance, and updates"
         case .permissions: return "System access"
         case .about: return "Version, credits, and security note"
@@ -70,7 +70,9 @@ struct SettingsView: View {
     @AppStorage(HotkeyConfig.unlockDisplayKey) private var unlockHotkeyDisplay = HotkeyConfig.defaultUnlockDisplay
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
     @AppStorage(Constants.cameraOnFailedUnlockKey) private var cameraOnFailedUnlock = Constants.defaultCameraOnFailedUnlock
-    @AppStorage(Constants.showRevealOnAllDisplaysKey) private var showRevealOnAllDisplays = Constants.defaultShowRevealOnAllDisplays
+    @AppStorage(HotCornerConfig.enabledKey) private var hotCornerEnabled = HotCornerConfig.defaultEnabled
+    @AppStorage(HotCornerConfig.cornerKey) private var hotCorner = HotCornerConfig.defaultCorner
+    @AppStorage(HotCornerConfig.delayKey) private var hotCornerDelay = HotCornerConfig.defaultDelay
 
 
     @ObservedObject private var updater = UpdateController.shared
@@ -116,6 +118,12 @@ struct SettingsView: View {
             applyAppearance(appearanceMode)
             startAccessibilityPolling()
             touchIDAvailable = Authenticator.isBiometricsAvailable
+
+            // Snap a stored dwell that is no longer on the menu onto the nearest
+            // one that is. `HotCornerConfig.delay` already does this for the
+            // monitor, but the `Picker` binds to the raw stored value, and a
+            // selection matching no tag draws an empty dropdown.
+            if hotCornerDelay != HotCornerConfig.delay { hotCornerDelay = HotCornerConfig.delay }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshAccessibilityStatus()
@@ -227,15 +235,6 @@ struct SettingsView: View {
             }
 
             SettingsPanel {
-                SettingsRow(
-                    "Show on every display",
-                    subtitle: "Mirror the reveal across all monitors. Off shows it only on the main one."
-                ) {
-                    SettingsSwitch(isOn: $showRevealOnAllDisplays)
-                }
-
-                SettingsDivider()
-
                 SettingsRow(
                     "Camera on failed unlock",
                     subtitle: "Saves a photo of the attempt to Downloads."
@@ -565,6 +564,58 @@ struct SettingsView: View {
                     ? "Touch ID unlocks instantly. Rest a finger on the sensor any time while locked, or use the shortcut."
                     : "No Touch ID on this Mac. Use the shortcut, or click Authenticate on the lock screen to unlock with your password."
             )
+
+            SettingsPanel {
+                SettingsRow("Hot corner", subtitle: "Lock when the pointer rests in a corner of the screen.") {
+                    SettingsSwitch(isOn: $hotCornerEnabled)
+                        .onChange(of: hotCornerEnabled) { _, _ in
+                            NotificationCenter.default.post(name: .flipOffHotCornerPreferenceChanged, object: nil)
+                        }
+                }
+
+                if hotCornerEnabled {
+                    SettingsDivider()
+
+                    SettingsRow("Corner", subtitle: "Works on whichever display the pointer is on.") {
+                        SettingsDropdown(
+                            selection: $hotCorner,
+                            options: ([HotCorner.any] + HotCorner.physical).map { ($0.displayName, $0.rawValue) }
+                        )
+                        .onChange(of: hotCorner) { _, _ in
+                            NotificationCenter.default.post(name: .flipOffHotCornerPreferenceChanged, object: nil)
+                        }
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow("Rest for", subtitle: "How long the pointer has to sit there before it locks.") {
+                        // Same width as every other dropdown in Settings, short
+                        // contents notwithstanding. A `Picker(.menu)` draws its
+                        // chrome slightly outside the frame it is given, so two
+                        // differently-sized dropdowns in one panel do not end up
+                        // sharing a right edge — they miss by a couple of points,
+                        // which reads as a misalignment rather than a design.
+                        SettingsDropdown(
+                            selection: $hotCornerDelay,
+                            options: HotCornerConfig.delayOptions.map { (HotCornerConfig.label(forDelay: $0), $0) }
+                        )
+                        .onChange(of: hotCornerDelay) { _, _ in
+                            NotificationCenter.default.post(name: .flipOffHotCornerPreferenceChanged, object: nil)
+                        }
+                    }
+                }
+            }
+
+            // Stated rather than detected. macOS exposes no way to read another
+            // app's or the system's hot-corner assignments, so a warning that
+            // named the actual conflict would be a guess — and both actions do
+            // fire, which looks like a bug in FlipOff if nobody said so first.
+            if hotCornerEnabled {
+                SettingsNote(
+                    systemImage: "square.on.square.dashed",
+                    text: "macOS has its own Hot Corners (System Settings > Desktop & Dock). If the same corner is assigned there, both will trigger."
+                )
+            }
         }
     }
 
@@ -906,17 +957,13 @@ struct SettingsView: View {
             }
 
             SettingsPanel {
-                SettingsRow("Made by Sirpooya") {
+                SettingsRow(
+                    "Made by Sirpooya",
+                    subtitle: "FlipOff busts snoops with a photo and shields your screen from prying eyes."
+                ) {
                     Link("View on GitHub", destination: repoURL)
                         .buttonStyle(.link)
                 }
-
-                SettingsDivider()
-
-                Text("FlipOff busts snoops with a photo and shields your screen from prying eyes. For real security, use your Mac's lock screen (Ctrl+Cmd+Q).")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 SettingsDivider()
 
@@ -1250,7 +1297,14 @@ private struct SettingsDropdown<Value: Hashable>: View {
         }
         .labelsHidden()
         .pickerStyle(.menu)
-        .frame(width: width)
+        // `alignment: .trailing`, and it is load-bearing. A `Picker(.menu)` wraps
+        // an NSPopUpButton, which keeps its intrinsic width and does *not* stretch
+        // to fill a frame — so a plain `.frame(width:)` leaves the button CENTERED
+        // in the box. Narrow contents ("5s") then float in the middle of 190pt
+        // while the switches in the same panel sit flush against the panel edge,
+        // and two dropdowns with different content widths do not even line up with
+        // each other. Aligning inside the box puts every control on one right edge.
+        .frame(width: width, alignment: .trailing)
     }
 }
 

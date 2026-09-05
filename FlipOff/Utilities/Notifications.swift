@@ -18,6 +18,10 @@ extension Notification.Name {
     static let flipOffOverlayDidBecomeKey = Notification.Name("flipOffOverlayDidBecomeKey")
     static let toggleFlipOff = Notification.Name("toggleFlipOff")
     static let flipOffHotkeyPreferenceChanged = Notification.Name("flipOffHotkeyPreferenceChanged")
+    /// Posted when the hot-corner toggle, corner, or dwell time changes. Observed
+    /// by `LockController`, which owns the monitor — Settings only writes the
+    /// defaults, it has no handle on the thing that polls.
+    static let flipOffHotCornerPreferenceChanged = Notification.Name("flipOffHotCornerPreferenceChanged")
     /// Posted when an AI agent pings (bridged from the distributed notification, or fired by the in-app test button).
     static let flipOffPing = Notification.Name("flipOffPing")
     /// Reopens the onboarding window, optionally on a given step (`object` is the

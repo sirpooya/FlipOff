@@ -16,12 +16,6 @@ enum Constants {
     static let cameraOnFailedUnlockKey = "cameraOnFailedUnlock"
     static let defaultCameraOnFailedUnlock = true
 
-    /// UserDefaults key: run the full reveal (glyph/message, or the video) on every
-    /// attached display instead of only the primary one. Off leaves the secondary
-    /// shields as bare scrim, the pre-1.4.2 behavior.
-    static let showRevealOnAllDisplaysKey = "showRevealOnAllDisplays"
-    static let defaultShowRevealOnAllDisplays = true
-
     /// The reveal scrim laid over the live desktop once the lock announces itself.
     /// Exposed as a default so the dim can be dialed without a rebuild — at 0 the
     /// desktop shows through untouched, which makes white lock text hard to read

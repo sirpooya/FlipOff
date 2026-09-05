@@ -22,7 +22,8 @@ LockController (ObservableObject, single source of truth for lock state)
   ├─ InputBlocker        — CGEventTap swallowing keyboard/scroll/tablet input
   ├─ Authenticator       — Touch ID / password via LocalAuthentication
   ├─ CameraCapturer      — optional silent mugshot of a failed-unlock attempt
-  └─ SleepPreventer      — IOPM assertion, blocks idle display sleep while locked
+  ├─ SleepPreventer      — IOPM assertion, blocks idle display sleep while locked
+  └─ HotCornerMonitor    — optional pointer-dwell-in-a-corner trigger
 HotkeyManager — global hotkey registration (separate from InputBlocker's tap)
 ```
 
@@ -53,9 +54,14 @@ The reveal scrim (`LockScreenView`'s `Constants.Backdrop.dimKey` black overlay) 
 keyed to `controller.revealed`, **never** to the lock state itself — dimming at lock
 time would give away that the screen is covered before anyone touches it, defeating
 the entire bait. The scrim only fades in once the mascot pops, where it earns its
-keep making the message legible. Secondary displays get the same scrim and nothing
-else (`AmbientScreenView`, wrapped in `AmbientBackdropHost` so they observe
-`revealed` and dim in step with the primary).
+keep making the message legible. **Every secondary display mirrors the full reveal**,
+running its own `LockScreenView` at `screenRole: .ambient` — the mascot landing on one
+screen of a two-monitor desk while the other merely dims reads as a glitch, not a gag.
+
+That was briefly a "Show on every display" toggle defaulting to on. It is gone, along
+with `AmbientBackdropHost` and `AmbientScreenView`, the bare-scrim views the off
+branch drew. Nothing else referenced them, so reinstating the choice means writing
+those back, not just restoring a `guard`.
 
 ## Load-bearing ordering
 
@@ -293,6 +299,42 @@ so the gag can be sprung repeatedly on one lock.
   that's where the scare should not go off. A player that has never played renders
   black, so `Coordinator.setPlaying` does one exact-tolerance seek to zero to make a
   paused layer show frame one instead of a black rectangle.
+
+## Hot corner
+
+`HotCornerMonitor` locks when the pointer rests in a chosen screen corner for a
+chosen time (`HotCornerConfig`, off by default, Settings > Shortcuts). Three
+decisions carry the feature:
+
+- **It polls `NSEvent.mouseLocation` at 10 Hz — it does not observe mouse events.**
+  A global `NSEvent` monitor for `.mouseMoved` is TCC-gated input observation, and
+  FlipOff's whole permissions story is one Accessibility grant and nothing else.
+  Reading the cursor position needs no grant at all, so the corner works the moment
+  it is switched on, including while an Accessibility grant is being repaired. A
+  second `CGEventTap` was never an option either: `InputBlocker` already owns one,
+  and the two would have to be sequenced for a job that needs no events.
+- **Neither `NSMouseInRect` nor `NSPointInRect` can express the corner test.** Both
+  are half-open on two of four sides — `NSMouseInRect(_:_:false)` excludes maxX and
+  minY, `NSPointInRect` excludes maxX and maxY — and the excluded sides are exactly
+  the screen boundaries a pointer pins itself against. A cursor slammed into the
+  bottom-left reports `y == frame.minY`, which `NSMouseInRect` calls outside, so two
+  of the four corners would never have fired. `HotCorner.contains` is therefore
+  written out longhand: **inclusive on the two screen edges, exclusive on the two
+  inner ones**. `HotCorner.screen(containing:)` is fully inclusive for the same
+  reason. `HotCornerTests` pins both.
+- **The monitor disarms after firing and re-arms only once the pointer leaves.**
+  Unlocking does not move the mouse, so the cursor is normally still parked in the
+  corner that just fired; without this the user unlocks, waits out the dwell, and is
+  locked again having touched nothing. `start()` applies the same rule, arming only
+  if the pointer is somewhere else right now.
+
+`LockController.refreshHotCornerMonitoring()` drives start/stop off `state`'s
+`didSet`, and the same `didSet` now maintains `isAnyLockActive`. That flag used to
+be written inside `transitionTo`, which covers every path *into* a lock and none of
+the paths out — `unlock()` and `forceUnlock()` both assign `state` directly — so it
+stayed `true` forever after the first lock and `UpdateController` silently stopped
+checking for updates. Deriving it from the property is the only form that survives a
+direct assignment.
 
 ## Lock hotkey vs unlock hotkey
 

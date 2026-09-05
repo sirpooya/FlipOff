@@ -137,6 +137,10 @@ struct OnboardingView: View {
             } else {
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                 NotificationCenter.default.post(name: .flipOffHotkeyPreferenceChanged, object: nil)
+                // The hot-corner monitor refuses to run until onboarding is done,
+                // so finishing it is a reason to re-evaluate — otherwise a corner
+                // enabled on a fresh install would sit dead until the next launch.
+                NotificationCenter.default.post(name: .flipOffHotCornerPreferenceChanged, object: nil)
                 hasCompletedOnboarding = true
                 // Open Settings immediately — this activates the event pipeline
                 // so the global hotkey works without needing to click the menu bar.
