@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-06
+
 ### Added
 - **Hot corner.** Rest the pointer in a corner of the screen and FlipOff locks. Choose any of the four corners (or all of them) and how long the pointer has to sit there — 1, 5, 10 or 30 seconds — under Settings > Shortcuts. Off by default, set to the bottom-right corner and 5 seconds, and it needs no extra system permission. Note that macOS has its own Hot Corners: if the same corner is assigned there too, both will trigger.
 
