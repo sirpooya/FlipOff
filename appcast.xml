@@ -6,6 +6,39 @@
         <description>Most recent changes to FlipOff.</description>
         <language>en</language>
         <item>
+            <title>1.7.0</title>
+            <pubDate>Sat, 05 Sep 2026 21:40:55 +0000</pubDate>
+            <sparkle:version>28</sparkle:version>
+            <sparkle:shortVersionString>1.7.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+<h3>Added</h3>
+<ul>
+    <li><strong>Hot corner.</strong> Rest the pointer in a corner of the screen and FlipOff locks. Choose any of the four corners (or all of them) and how long the pointer has to sit there — 1, 5, 10 or 30 seconds — under Settings &gt; Shortcuts. Off by default, set to the bottom-right corner and 5 seconds, and it needs no extra system permission. Note that macOS has its own Hot Corners: if the same corner is assigned there too, both will trigger.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+    <li>The lock reveal now always mirrors across every attached display. The 'Show on every display' setting is gone — it defaulted to on, and the alternative left secondary monitors dimming without the gag, which read as a glitch.</li>
+    <li>The bundled lock video is now listed as just 'Creepy Face' — it already leads the menu, so the '(built-in)' tag read as part of the title.</li>
+    <li>Settings &gt; About reads as one block: the line about what FlipOff does now sits directly under "Made by Sirpooya" as its description, instead of being fenced off as a separate paragraph.</li>
+</ul>
+<h3>Removed</h3>
+<ul>
+    <li>Dropped the 'For real security, use your Mac's lock screen' line from Settings &gt; About.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+    <li>Dropdowns in Settings line up with the switches above and below them. Every menu was drawn centred inside its column, so a short choice like "2s" or "None" floated in the middle of the row while the switches sat flush against the edge of the panel. They all share one right edge now.</li>
+    <li>Update checks no longer stop working after the first lock. The internal 'a lock is up' flag was only ever cleared on the way in, never on the way out, so Sparkle refused every check for the rest of the session.</li>
+</ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/sirpooya/FlipOff/releases/download/v1.7.0/FlipOff-v1.7.0.zip"
+                length="4287491"
+                type="application/octet-stream"
+                sparkle:edSignature="PYDQEiFJYxS4+BFIRjB9+ATdrWsKGKpIYf2zeV3N2QRvKTmNcMXfO8GpNgqeLF/uwVs+CNhTunFazaw4pSImDg==" />
+        </item>
+        <item>
             <title>1.6.0</title>
             <pubDate>Wed, 02 Sep 2026 08:14:16 +0000</pubDate>
             <sparkle:version>27</sparkle:version>
