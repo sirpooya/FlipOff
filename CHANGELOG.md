@@ -3,16 +3,18 @@
 ## [Unreleased]
 
 ### Added
-- Hot corner: rest the pointer in a screen corner for a chosen time and FlipOff locks. Pick any of the four corners (or all of them) and a dwell of 0.5 to 5 seconds under Settings > Shortcuts. Off by default, and it needs no extra system permission.
+- **Hot corner.** Rest the pointer in a corner of the screen and FlipOff locks. Choose any of the four corners (or all of them) and how long the pointer has to sit there — 1, 5, 10 or 30 seconds — under Settings > Shortcuts. Off by default, set to the bottom-right corner and 5 seconds, and it needs no extra system permission. Note that macOS has its own Hot Corners: if the same corner is assigned there too, both will trigger.
 
 ### Changed
 - The lock reveal now always mirrors across every attached display. The 'Show on every display' setting is gone — it defaulted to on, and the alternative left secondary monitors dimming without the gag, which read as a glitch.
 - The bundled lock video is now listed as just 'Creepy Face' — it already leads the menu, so the '(built-in)' tag read as part of the title.
+- Settings > About reads as one block: the line about what FlipOff does now sits directly under "Made by Sirpooya" as its description, instead of being fenced off as a separate paragraph.
 
 ### Removed
 - Dropped the 'For real security, use your Mac's lock screen' line from Settings > About.
 
 ### Fixed
+- Dropdowns in Settings line up with the switches above and below them. Every menu was drawn centred inside its column, so a short choice like "2s" or "None" floated in the middle of the row while the switches sat flush against the edge of the panel. They all share one right edge now.
 - Update checks no longer stop working after the first lock. The internal 'a lock is up' flag was only ever cleared on the way in, never on the way out, so Sparkle refused every check for the rest of the session.
 
 ## [1.6.0] - 2026-09-02
