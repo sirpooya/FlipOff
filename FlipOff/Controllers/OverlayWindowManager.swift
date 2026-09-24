@@ -97,6 +97,18 @@ class OverlayWindowManager {
         for window in windows { window.level = shieldLevel }
     }
 
+    /// Whether the primary shield is key right now, which is the condition
+    /// `LAAuthenticationView` needs before an arm will take. `LockController`
+    /// waits on this rather than arming blind.
+    var isPrimaryKey: Bool { windows.first?.isKeyWindow ?? false }
+
+    /// Asks for key on the primary shield again. Used by the Touch ID arm loop when
+    /// the shield is still not key: activation can be refused or land late, and
+    /// nothing else would retry it.
+    func reclaimFocus() {
+        focusPrimaryWindow()
+    }
+
     private func createWindows() {
         guard let factory = contentFactory else {
             logger.error("No content factory to display in overlay")
@@ -310,6 +322,9 @@ class OverlayWindowManager {
                 // attached mid-lock just gets its own window over its own live
                 // desktop.
                 self.createWindows()
+                // The new primary view mounted around the old, already-bound
+                // Touch ID context. Ask for a fresh one.
+                NotificationCenter.default.post(name: .flipOffOverlayRebuilt, object: nil)
             }
             self.screenChangeWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)

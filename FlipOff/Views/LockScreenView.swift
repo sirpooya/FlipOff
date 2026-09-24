@@ -223,7 +223,11 @@ struct LockScreenView: View {
                                     NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
                                     controller.requestUnlock()
                                 } label: {
-                                    Text("Authenticate with Touch ID")
+                                    // Never mentions the hotkey: whoever reads this
+                                    // may not be the owner.
+                                    Text(controller.touchIDLockedOut
+                                         ? "Touch ID is locked. Use your password"
+                                         : "Authenticate with Touch ID")
                                         .font(.lockLabel)
                                         .foregroundStyle(.white.opacity(hoveringAuth ? 0.6 : 0.4))
                                         .tracking(0.3)
@@ -311,6 +315,28 @@ struct LockScreenView: View {
                         .padding(.trailing, compact ? 16 : 32)
                         .padding(.bottom, compact ? 16 : 32)
                     }
+                } else if isPrimary, controller.touchIDLockedOut {
+                    // macOS has switched Touch ID off after too many wrong fingers,
+                    // and no app can override that. Keep the disc where it always is,
+                    // with a dimmed mark, so the owner sees the sensor is out rather
+                    // than wondering why the disc vanished. Just a drawing: there is
+                    // no context to arm.
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Image(systemName: "touchid")
+                                .font(.system(size: 22, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.35))
+                                .frame(width: 32, height: 32)
+                                .padding(2)
+                                .background(Circle().fill(.black.opacity(0.5)))
+                                .accessibilityLabel("Touch ID is locked. Use your password to unlock")
+                        }
+                        .padding(.trailing, compact ? 16 : 32)
+                        .padding(.bottom, compact ? 16 : 32)
+                    }
+                    .allowsHitTesting(false)
                 }
             }
             .accessibilityElement(children: .contain)

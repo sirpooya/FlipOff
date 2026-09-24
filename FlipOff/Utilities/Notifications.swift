@@ -16,6 +16,9 @@ extension Notification.Name {
     /// visible to user because … is not key"), so `LockController` re-issues its
     /// context here to rebuild the view against a window that now qualifies.
     static let flipOffOverlayDidBecomeKey = Notification.Name("flipOffOverlayDidBecomeKey")
+    /// Posted after a display change tore down and rebuilt the shield windows
+    /// mid-lock. The rebuilt Touch ID view needs a fresh context, not the old one.
+    static let flipOffOverlayRebuilt = Notification.Name("flipOffOverlayRebuilt")
     static let toggleFlipOff = Notification.Name("toggleFlipOff")
     static let flipOffHotkeyPreferenceChanged = Notification.Name("flipOffHotkeyPreferenceChanged")
     /// Posted when the hot-corner toggle, corner, or dwell time changes. Observed

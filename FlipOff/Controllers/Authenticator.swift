@@ -21,6 +21,16 @@ class Authenticator {
         return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
     }
 
+    /// True when macOS has switched Touch ID off after too many wrong fingers.
+    /// Apps cannot clear or bypass this; only the Mac password does. The lock
+    /// screen uses it to explain why the glyph stopped working instead of just
+    /// dropping it.
+    static var isBiometryLockedOut: Bool {
+        var error: NSError?
+        let ok = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        return !ok && error?.code == LAError.biometryLockout.rawValue
+    }
+
     /// Authenticate with Touch ID, with password fallback via system dialog.
     func authenticate(reason: String = "Unlock FlipOff") async -> Bool {
         cancelPending()

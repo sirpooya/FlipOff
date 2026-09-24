@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- When macOS locks Touch ID after too many wrong fingers, the lock screen keeps a dimmed fingerprint mark and the unlock button asks for your password, instead of the fingerprint silently disappearing.
+
+### Fixed
+- Touch ID unlock no longer goes dead mid-lock. The sensor now waits until the lock screen has focus before listening, and restarts after a cancelled unlock dialog, after the Mac wakes, and after a display is plugged in or removed. This also fixes the empty black circle where the fingerprint should be.
+
 ## [1.7.0] - 2026-09-06
 
 ### Added

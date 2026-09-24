@@ -415,6 +415,18 @@ single-key behaviour is byte-for-byte unchanged.
     mismatch keeps arming alive but renders blank, because the layer-backed
     `PKGlyphView` inside doesn't survive a bounds scale. Size the chrome around
     the glyph, not the glyph.
+  - **Every way back to a listening sensor goes through
+    `LockController.requestTouchIDRearm`.** It is debounced (150ms) and re-issues
+    the context. Callers: key regained, return from `.unlocking` to `.locked`
+    (in `state`'s `didSet`, so every fallback-dialog exit is covered), display
+    wake, session active again, and `.flipOffOverlayRebuilt` after a display
+    change. The arm loop itself also refuses to evaluate until
+    `OverlayWindowManager.isPrimaryKey` is true, re-asking for focus about once a
+    second, because an arm on a non-key window is ignored for good. An empty
+    black disc on the shield means one of these was missed.
+  - **Biometry lockout (5 wrong fingers) cannot be bypassed by an app.**
+    `touchIDLockedOut` keeps a dimmed disc up and relabels the fallback button to
+    the password. The label never mentions the hotkey, since a snoop reads it too.
   Password fallback still needs the ordinary modal path
   (`authenticateWithPassword()`), on an explicit user action only.
 - **App-wide notifications must be observed by `LockController`, never by a view.**

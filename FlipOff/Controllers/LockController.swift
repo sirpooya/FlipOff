@@ -27,6 +27,13 @@ class LockController: ObservableObject {
         didSet {
             LockController.isAnyLockActive = (state != .unlocked)
             refreshHotCornerMonitoring()
+            // Every way out of a fallback auth that lands back on the shield
+            // (cancelled dialog, wrong password, session interrupted) goes through
+            // here. The Touch ID loop exits the moment state leaves `.locked`, so
+            // without this the sensor stayed dead for the rest of the lock.
+            if oldValue == .unlocking && state == .locked {
+                requestTouchIDRearm("auth dialog closed")
+            }
         }
     }
     @Published var lockStartTime: Date?
@@ -59,6 +66,11 @@ class LockController: ObservableObject {
     /// init, so a re-arm has to produce a brand new view.
     @Published private(set) var touchIDGeneration = 0
 
+    /// True while macOS has Touch ID locked out (too many wrong fingers). The glyph
+    /// can't arm then, so the lock screen shows a dimmed mark and points the
+    /// fallback button at the password instead of silently dropping the disc.
+    @Published private(set) var touchIDLockedOut = false
+
     private let overlayManager = OverlayWindowManager()
     private let inputBlocker = InputBlocker()
     private let authenticator = Authenticator()
@@ -73,6 +85,7 @@ class LockController: ObservableObject {
     private var inputAttemptObserver: Any?
     private var dismissRevealObserver: Any?
     private var overlayKeyObserver: Any?
+    private var overlayRebuiltObserver: Any?
     private var accessibilityCheckTimer: Timer?
     private var errorClearTask: Task<Void, Never>?
     private var toggleObserver: Any?
@@ -87,6 +100,7 @@ class LockController: ObservableObject {
     private var lastPingTime: Date?
     private var revealHideTask: Task<Void, Never>?
     private var touchIDArmTask: Task<Void, Never>?
+    private var touchIDRearmTask: Task<Void, Never>?
     private var hasCapturedThisLock = false
 
     init() {
@@ -175,10 +189,17 @@ class LockController: ObservableObject {
             forName: .flipOffOverlayDidBecomeKey, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self,
-                      self.state == .locked,
-                      !self.authenticationInProgress else { return }
-                self.issueTouchIDContext()
+                self?.requestTouchIDRearm("shield regained key")
+            }
+        }
+
+        // A display change rebuilt the windows, and the new glyph mounted around
+        // the old context, which is already bound to a view that no longer exists.
+        overlayRebuiltObserver = NotificationCenter.default.addObserver(
+            forName: .flipOffOverlayRebuilt, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.requestTouchIDRearm("shield rebuilt")
             }
         }
 
@@ -198,6 +219,10 @@ class LockController: ObservableObject {
                 // recreated here rather than guarded on isActive.
                 self.sleepPreventer.allowSleep()
                 self.sleepPreventer.preventSleep()
+                // A read pending across sleep can be dropped (or the macOS login
+                // window can take the finger), and the shield never lost key, so
+                // nothing else would notice the sensor went quiet.
+                self.requestTouchIDRearm("display wake")
             }
         }
 
@@ -233,6 +258,7 @@ class LockController: ObservableObject {
                 self.inputBlocker.stopBlocking()
                 self.inputBlocker.startBlocking()
                 self.overlayManager.blockSystemDialogs()
+                self.requestTouchIDRearm("session active again")
             }
         }
 
@@ -319,8 +345,10 @@ class LockController: ObservableObject {
         if let obs = hotCornerObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = inputAttemptObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = overlayKeyObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = overlayRebuiltObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = dismissRevealObserver { NotificationCenter.default.removeObserver(obs) }
         revealHideTask?.cancel()
+        touchIDRearmTask?.cancel()
     }
 
     // MARK: - Public
@@ -432,12 +460,35 @@ class LockController: ObservableObject {
     private func issueTouchIDContext() {
         guard let context = authenticator.makeAutoUnlockContext() else {
             // No sensor or nothing enrolled — leave the glyph unmounted rather than
-            // showing a Touch ID affordance that can never succeed.
+            // showing a Touch ID affordance that can never succeed. Lockout is the
+            // exception worth telling apart: the sensor exists, macOS has just
+            // switched it off until the password is used.
             touchIDContext = nil
+            touchIDLockedOut = Authenticator.isBiometryLockedOut
             return
         }
+        touchIDLockedOut = false
         touchIDContext = context
         touchIDGeneration &+= 1
+    }
+
+    /// The one way back to a listening sensor from anywhere mid-lock: focus
+    /// regained, a fallback dialog closed, a display wake, a window rebuild.
+    /// Issues a fresh context, which rebuilds the glyph, whose `onAppear` arms it.
+    ///
+    /// Debounced, because these triggers arrive in bursts (a rebuild also moves
+    /// key, a dialog closing also hands key back) and each re-issue tears down a
+    /// view mid-arm. Several triggers inside the window become one re-issue.
+    private func requestTouchIDRearm(_ reason: String) {
+        touchIDRearmTask?.cancel()
+        touchIDRearmTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard let self, !Task.isCancelled,
+                  self.state == .locked,
+                  !self.authenticationInProgress else { return }
+            logger.info("Re-arming Touch ID: \(reason, privacy: .public)")
+            self.issueTouchIDContext()
+        }
     }
 
     /// Arms the sensor against the currently published context. Called by the lock
@@ -452,12 +503,26 @@ class LockController: ObservableObject {
     func armEmbeddedTouchID() {
         touchIDArmTask?.cancel()
         touchIDArmTask = Task { @MainActor [weak self] in
+            var keyWaits = 0
             while let self, self.state == .locked, !Task.isCancelled {
                 guard let context = self.touchIDContext else { return }
 
                 // Stand down while a manual auth owns the sensor, then re-arm.
                 if self.authenticationInProgress {
                     try? await Task.sleep(nanoseconds: 500_000_000)
+                    continue
+                }
+
+                // An arm issued while the shield isn't key is ignored for the
+                // life of that view: the glyph stays an empty disc and no finger
+                // registers. App activation is asynchronous (and slower still
+                // when the lock came from the hotkey or hot corner with another
+                // app in front), so the view routinely mounts before key lands.
+                // Wait for it, and keep asking in case activation was refused.
+                if !self.overlayManager.isPrimaryKey {
+                    keyWaits += 1
+                    if keyWaits % 10 == 3 { self.overlayManager.reclaimFocus() }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                     continue
                 }
 
@@ -704,7 +769,10 @@ class LockController: ObservableObject {
         revealHideTask = nil
         touchIDArmTask?.cancel()
         touchIDArmTask = nil
+        touchIDRearmTask?.cancel()
+        touchIDRearmTask = nil
         touchIDContext = nil
+        touchIDLockedOut = false
         authenticator.cancelAll()
         stopAccessibilityMonitoring()
         stopTimer()
@@ -723,7 +791,10 @@ class LockController: ObservableObject {
         revealHideTask = nil
         touchIDArmTask?.cancel()
         touchIDArmTask = nil
+        touchIDRearmTask?.cancel()
+        touchIDRearmTask = nil
         touchIDContext = nil
+        touchIDLockedOut = false
         authenticationInProgress = false
         isAuthenticating = false
         authenticator.cancelAll()
