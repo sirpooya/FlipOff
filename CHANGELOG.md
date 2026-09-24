@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-09-24
+
 ### Changed
 - When macOS locks Touch ID after too many wrong fingers, the lock screen keeps a dimmed fingerprint mark and the unlock button asks for your password, instead of the fingerprint silently disappearing.
 
