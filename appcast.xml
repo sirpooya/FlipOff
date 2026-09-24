@@ -6,6 +6,28 @@
         <description>Most recent changes to FlipOff.</description>
         <language>en</language>
         <item>
+            <title>1.7.1</title>
+            <pubDate>Thu, 24 Sep 2026 10:28:19 +0000</pubDate>
+            <sparkle:version>29</sparkle:version>
+            <sparkle:shortVersionString>1.7.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+<h3>Changed</h3>
+<ul>
+    <li>When macOS locks Touch ID after too many wrong fingers, the lock screen keeps a dimmed fingerprint mark and the unlock button asks for your password, instead of the fingerprint silently disappearing.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+    <li>Touch ID unlock no longer goes dead mid-lock. The sensor now waits until the lock screen has focus before listening, and restarts after a cancelled unlock dialog, after the Mac wakes, and after a display is plugged in or removed. This also fixes the empty black circle where the fingerprint should be.</li>
+</ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/sirpooya/FlipOff/releases/download/v1.7.1/FlipOff-v1.7.1.zip"
+                length="4279723"
+                type="application/octet-stream"
+                sparkle:edSignature="E8pupuI/4GwxxqtAa2nDL3KDxIPJh90sWmoMOPvmfkwdtB3wovsOCMJFHeutnj6miaAb2Jhvx5FPa4AYsMTtAA==" />
+        </item>
+        <item>
             <title>1.7.0</title>
             <pubDate>Sat, 05 Sep 2026 21:40:55 +0000</pubDate>
             <sparkle:version>28</sparkle:version>
