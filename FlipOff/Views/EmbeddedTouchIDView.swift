@@ -55,8 +55,26 @@ struct EmbeddedTouchIDView: NSViewRepresentable {
     /// be — the system mark is a saturated red, desaturated at the call site.
     var controlSize: NSControl.ControlSize = .mini
 
+    /// Called once for every paired view, on the runloop turn after it is created,
+    /// with the context it was paired with. This is what arms the sensor, and it
+    /// hangs off `makeNSView` because that is the one event guaranteed to happen
+    /// exactly once per new `LAAuthenticationView`.
+    ///
+    /// It used to be an `.onAppear` attached after the caller's `.id()`. That
+    /// modifier sits outside the identity the `.id` replaces, so it fired for the
+    /// first glyph of a window and never again: every re-issued context got a fresh
+    /// view and nothing ever evaluated on it. The disc stayed up, empty, and no
+    /// finger registered until the lock ended.
+    var onPaired: (LAContext) -> Void = { _ in }
+
     func makeNSView(context ctx: Context) -> LAAuthenticationView {
-        LAAuthenticationView(context: context, controlSize: controlSize)
+        let view = LAAuthenticationView(context: context, controlSize: controlSize)
+        // Next turn, so SwiftUI has inserted the view into its window before the
+        // controller evaluates against it.
+        let paired = context
+        let onPaired = onPaired
+        DispatchQueue.main.async { onPaired(paired) }
+        return view
     }
 
     func updateNSView(_ nsView: LAAuthenticationView, context ctx: Context) {

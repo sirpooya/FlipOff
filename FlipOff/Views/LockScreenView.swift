@@ -291,10 +291,18 @@ struct LockScreenView: View {
                             // between don't render at all and can break arming
                             // outright — see the size notes in EmbeddedTouchIDView
                             // before reaching for a scale here.
-                            EmbeddedTouchIDView(context: touchIDContext, controlSize: .small)
+                            //
+                            // Armed from `onPaired`, never `.onAppear`: an onAppear
+                            // after the `.id` below does not re-fire when the
+                            // generation changes, which left every re-armed glyph an
+                            // empty disc that ignored fingers.
+                            EmbeddedTouchIDView(
+                                context: touchIDContext,
+                                controlSize: .small,
+                                onPaired: { controller.armEmbeddedTouchID(for: $0) }
+                            )
                                 .frame(width: 32, height: 32)
                                 .id(controller.touchIDGeneration)
-                                .onAppear { controller.armEmbeddedTouchID() }
                                 // The system mark is a saturated red; drained to a
                                 // neutral grey so it reads as a quiet hint on the bare
                                 // shield instead of an error badge, then pushed to

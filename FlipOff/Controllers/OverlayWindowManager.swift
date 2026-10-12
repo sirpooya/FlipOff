@@ -215,7 +215,7 @@ class OverlayWindowManager {
                       let primary = self.windows.first,
                       primary.level == self.shieldLevel,
                       !primary.isKeyWindow else { return }
-                logger.info("Shield lost key — reclaiming so Touch ID stays armed")
+                logger.notice("Shield lost key — reclaiming so Touch ID stays armed")
                 self.focusPrimaryWindow()
             }
         }
@@ -234,7 +234,7 @@ class OverlayWindowManager {
             // An arm that happened while the window wasn't key was ignored by the
             // framework; the context has to be re-issued so a fresh paired view
             // evaluates against a window that now qualifies.
-            logger.info("Shield regained key — re-arming Touch ID")
+            logger.notice("Shield regained key — re-arming Touch ID")
             NotificationCenter.default.post(name: .flipOffOverlayDidBecomeKey, object: nil)
         }
         keyObservers.append(become)
@@ -308,7 +308,7 @@ class OverlayWindowManager {
                     logger.info("Screen parameters changed but layout is identical — keeping windows")
                     return
                 }
-                logger.info("Screen parameters changed — recreating overlay windows")
+                logger.notice("Screen parameters changed — recreating overlay windows")
                 // Do NOT call window.close() — closing during a fade-in animation
                 // causes EXC_BAD_ACCESS in _NSWindowTransformAnimation dealloc.
                 for window in self.windows {

@@ -391,8 +391,20 @@ single-key behaviour is byte-for-byte unchanged.
   at the view's init, and evaluation *on that same context* draws into the view
   instead of an alert. Ordering is load-bearing — `LockController.issueTouchIDContext()`
   publishes the context so `LockScreenView` can build the paired view, and only then
-  does `armEmbeddedTouchID()` evaluate. Evaluate before the view exists and you get
+  does `armEmbeddedTouchID(for:)` evaluate. Evaluate before the view exists and you get
   the modal back. Three further constraints, all learned the hard way:
+  - **The arm is triggered from `makeNSView`, never `.onAppear`.**
+    `EmbeddedTouchIDView.onPaired` fires once per new `LAAuthenticationView`, which
+    is exactly once per context. It was an `.onAppear` attached after the glyph's
+    `.id(touchIDGeneration)`, and a modifier outside the `.id` belongs to the
+    identity that never changes, so it fired for the first glyph in each window and
+    never again. Every re-arm (focus regained, display change, wrong finger, closed
+    dialog) minted a context, built a view around it, and evaluated nothing: the
+    1.7.1 empty-disc bug, still there after 1.7.1's fix. The tell in the log is
+    `LAContext[n] created` with no `evaluatePolicy` after it. Tracing it is
+    possible because the arm, re-arm, read-ended and shield focus/rebuild lines log
+    at `.notice`: `.info` only reaches the persistent store when an error happens to
+    flush it, so after the fact most of the trail would be missing.
   - The view **must be visible**; it is mounted outside `LockScreenView`'s
     `.opacity(revealed ? 1 : 0)` fade for that reason. At opacity 0 there's no
     guarantee the framework routes to it rather than falling back to the alert. This

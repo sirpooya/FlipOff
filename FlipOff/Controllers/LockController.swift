@@ -57,7 +57,7 @@ class LockController: ObservableObject {
 
     /// Context for the lock screen's embedded Touch ID glyph, non-nil while locked
     /// on a Mac with an enrolled sensor. The view pairs with it at init; arming
-    /// happens in `armEmbeddedTouchID()` once that pairing exists, which is what
+    /// happens in `armEmbeddedTouchID(for:)` once that pairing exists, which is what
     /// keeps the prompt inside the shield instead of in a system modal.
     @Published private(set) var touchIDContext: LAContext?
 
@@ -184,7 +184,7 @@ class LockController: ObservableObject {
         // The shield taking key back is the moment touch-to-unlock can actually
         // work: `LAAuthenticationView` ignores an arm issued while its window isn't
         // key, and that ignored state is permanent for that view. Re-issuing the
-        // context rebuilds the view, and its `onAppear` arms the sensor again.
+        // context rebuilds the view, and its `onPaired` arms the sensor again.
         overlayKeyObserver = NotificationCenter.default.addObserver(
             forName: .flipOffOverlayDidBecomeKey, object: nil, queue: .main
         ) { [weak self] _ in
@@ -456,7 +456,8 @@ class LockController: ObservableObject {
     // screen can build the paired view) BEFORE anything evaluates on it.
 
     /// Publishes a fresh context for the lock screen's glyph. Arming waits for
-    /// `armEmbeddedTouchID()`, which the view calls once it's actually on screen.
+    /// `armEmbeddedTouchID(for:)`, which the glyph calls once its paired view
+    /// exists (`EmbeddedTouchIDView.onPaired`).
     private func issueTouchIDContext() {
         guard let context = authenticator.makeAutoUnlockContext() else {
             // No sensor or nothing enrolled — leave the glyph unmounted rather than
@@ -474,7 +475,7 @@ class LockController: ObservableObject {
 
     /// The one way back to a listening sensor from anywhere mid-lock: focus
     /// regained, a fallback dialog closed, a display wake, a window rebuild.
-    /// Issues a fresh context, which rebuilds the glyph, whose `onAppear` arms it.
+    /// Issues a fresh context, which rebuilds the glyph, whose `onPaired` arms it.
     ///
     /// Debounced, because these triggers arrive in bursts (a rebuild also moves
     /// key, a dialog closing also hands key back) and each re-issue tears down a
@@ -486,7 +487,7 @@ class LockController: ObservableObject {
             guard let self, !Task.isCancelled,
                   self.state == .locked,
                   !self.authenticationInProgress else { return }
-            logger.info("Re-arming Touch ID: \(reason, privacy: .public)")
+            logger.notice("Re-arming Touch ID: \(reason, privacy: .public)")
             self.issueTouchIDContext()
         }
     }
@@ -500,12 +501,18 @@ class LockController: ObservableObject {
     /// up, so a wrong finger doesn't permanently disarm touch-to-unlock. Never sets
     /// `authenticationInProgress`: that flag gates the hotkey, and holding it across
     /// a pending read would bolt the user out from behind their own shield.
-    func armEmbeddedTouchID() {
+    ///
+    /// `context` is the one the calling view was paired with. The pairing callback
+    /// lands a runloop turn after the view is built, so by then a burst of re-arm
+    /// triggers may already have replaced it; a view whose context is no longer
+    /// current is about to be torn down and must not take over the arm loop.
+    func armEmbeddedTouchID(for context: LAContext) {
+        guard context === touchIDContext else { return }
         touchIDArmTask?.cancel()
         touchIDArmTask = Task { @MainActor [weak self] in
             var keyWaits = 0
             while let self, self.state == .locked, !Task.isCancelled {
-                guard let context = self.touchIDContext else { return }
+                guard self.touchIDContext === context else { return }
 
                 // Stand down while a manual auth owns the sensor, then re-arm.
                 if self.authenticationInProgress {
@@ -526,7 +533,7 @@ class LockController: ObservableObject {
                     continue
                 }
 
-                logger.info("Arming embedded Touch ID — generation \(self.touchIDGeneration, privacy: .public)")
+                logger.notice("Arming embedded Touch ID — generation \(self.touchIDGeneration, privacy: .public)")
                 let authenticated = await self.authenticator.armEmbeddedBiometrics(context)
 
                 guard self.state == .locked, !Task.isCancelled else { return }
@@ -543,10 +550,11 @@ class LockController: ObservableObject {
                 // A consumed context can't be re-evaluated — issue a new one, which
                 // bumps the generation so the view rebuilds around it.
                 try? await Task.sleep(nanoseconds: 800_000_000)
-                guard self.state == .locked, !Task.isCancelled else { return }
+                guard self.state == .locked, !Task.isCancelled,
+                      self.touchIDContext === context else { return }
                 self.issueTouchIDContext()
-                // The rebuilt view calls back into this method; stop this loop so
-                // the two don't run concurrently against the same sensor.
+                // The rebuilt view's `onPaired` calls back into this method; stop
+                // this loop so the two don't run concurrently against the sensor.
                 return
             }
         }

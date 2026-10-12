@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Touch ID unlock now keeps working for the whole lock. After a display was plugged in or removed, the lock screen lost focus, a wrong finger was read, or the unlock dialog was closed, the fingerprint vanished from its circle and the sensor stopped responding until you unlocked with the hotkey.
+
 ## [1.7.1] - 2026-09-24
 
 ### Changed

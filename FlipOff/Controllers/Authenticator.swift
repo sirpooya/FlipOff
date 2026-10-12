@@ -108,7 +108,7 @@ class Authenticator {
             } catch {
                 let code = (error as NSError).code
                 await MainActor.run {
-                    logger.info("Embedded biometric read ended: code=\(code, privacy: .public) \(error.localizedDescription, privacy: .public)")
+                    logger.notice("Embedded biometric read ended: code=\(code, privacy: .public) \(error.localizedDescription, privacy: .public)")
                 }
                 return false
             }
